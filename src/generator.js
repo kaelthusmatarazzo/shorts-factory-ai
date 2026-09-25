@@ -296,44 +296,44 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
 
   const allScenes = [
     {
-      narration: `${chosenLoopBridge.startText} Olha só: ${s1}`,
+      narration: `${chosenLoopBridge.startText} Olha só que impressionante: ${s1}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `nature phenomenon discovery`,
       directImageUrl: wikiFact.wikiImage || null,
       sceneLabel: `1/7 • ${cleanTopic} (Arquivo Real)`
     },
     {
-      narration: `E sabe o que deixa tudo isso ainda mais curioso? Quando a gente analisa de perto, ${s2}`,
+      narration: `E sabe o que deixa essa história ainda mais curiosa? Quando os pesquisadores analisam cada detalhe de perto, ${s2}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `science research laboratory`,
       sceneLabel: `2/7 • A Descoberta Científica`
     },
     {
-      narration: `Na verdade, tem um detalhe que chamou a atenção de todo mundo: ${s3}`,
+      narration: `Na verdade, existe um ponto específico que chamou a atenção de cientistas no mundo inteiro: ${s3}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `microscope macro detail`,
       sceneLabel: `3/7 • O Detalhe Inexplicável`
     },
     {
-      narration: `E não para por aí, viu? Repara no que acontece nas condições mais extremas: ${s4}`,
+      narration: `E não para por aí, viu? Repara só no que acontece quando esse fenômeno atinge suas condições mais extremas: ${s4}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `earth geology landscape`,
       sceneLabel: `4/7 • Condições Extremas`
     },
     {
-      narration: `Pra você ter uma ideia de como isso impressiona na prática, ${s5}`,
+      narration: `Pra você ter uma ideia real de como tudo isso impressiona na prática ao longo do tempo, ${s5}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `historical museum archive`,
       sceneLabel: `5/7 • Registros na História`
     },
     {
-      narration: `Hoje em dia, com a tecnologia atual, finalmente ficou provado que ${s6}`,
+      narration: `Hoje em dia, graças aos equipamentos modernos de alta precisão, finalmente ficou comprovado que ${s6}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `astronomy telescope technology`,
       sceneLabel: `6/7 • Revelação Moderna`
     },
     {
-      narration: `Se você adora descobrir curiosidades reais como essa sobre ${cleanTopic}, já segue aqui o perfil! ${chosenLoopBridge.endText}`,
+      narration: `Se você adora descobrir fatos curiosos reais como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${chosenLoopBridge.endText}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `planet earth space cosmos`,
       sceneLabel: `7/7 • Loop Infinito 🔁`,
