@@ -15,10 +15,17 @@ const FILES_TO_PUSH = [
 ];
 
 async function deployProjectToGitHub(githubToken, repoName = 'shorts-factory-ai') {
-  const token = String(githubToken || '').trim();
+  const tokenFile = path.join(__dirname, '..', 'data', 'github_token.json');
+  let token = String(githubToken || '').trim();
+  if (!token && fs.existsSync(tokenFile)) {
+    try { token = JSON.parse(fs.readFileSync(tokenFile, 'utf8')).token || ''; } catch (e) {}
+  }
   if (!token) {
     throw new Error('Informe seu Personal Access Token (ghp_...) do GitHub.');
   }
+  try {
+    fs.writeFileSync(tokenFile, JSON.stringify({ token, repoName }, null, 2), 'utf8');
+  } catch (e) {}
 
   const headers = {
     'Authorization': `Bearer ${token}`,
