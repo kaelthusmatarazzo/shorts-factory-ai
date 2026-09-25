@@ -548,8 +548,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += preparedScenes[i].duration;
   }
 
-  // TikTok Creator Rewards Monetization Guard: Guarantee >= 63.0 seconds (> 1 Minute)
-  const wantMonetizedLength = (scriptData.durationMode || 'monetized') !== 'short';
+  // On Vercel Serverless, skip sequential bonus loop so total wall time stays ~28s (the 7 parallel scenes already exceed 62s!)
+  const wantMonetizedLength = !process.env.VERCEL && (scriptData.durationMode || 'monetized') !== 'short';
   let bonusIdx = 0;
   const bonusFacts = [
     `Outro ponto fascinante analisado pelos cientistas é que a maior parte das pessoas passa a vida inteira sem notar como esse fenômeno influencia o nosso planeta todos os dias, mantendo mistérios que a ciência moderna ainda tenta desvendar por completo.`,
@@ -665,8 +665,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
-  // Render frames in parallel batches of 10 so CPU finishes in ~3 seconds
-  const BATCH_SIZE = 10;
+  // Render frames in parallel batches of 12 so CPU finishes in ~3 seconds
+  const BATCH_SIZE = 12;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
@@ -689,7 +689,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalMp4Path = path.join(outDir, finalFilename);
 
   // Single-Pass Encode: Master Frames + Master Voice WAV + BGM/SFX WAV -> Final MP4
-  const fpsRate = process.env.VERCEL ? '12' : '25';
+  const fpsRate = process.env.VERCEL ? '8' : '25';
   execFileSync(ffmpegPath, [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
@@ -698,7 +698,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-filter_complex', '[1:a]volume=1.40[voice];[2:a]volume=0.36[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
     '-map', '0:v',
     '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', fpsRate,
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-pix_fmt', 'yuv420p', '-r', fpsRate,
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
