@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Shorts Factory AI — 1-Click Daily Generator</title>
+  <style>
+    :root {
+      --bg: #07070d;
+      --card: #12121f;
+      --border: rgba(255, 255, 255, 0.09);
+      --primary: #00f0ff;
+      --accent: #7000ff;
+      --gold: #ffe600;
+      --success: #00ff88;
+      --text: #f5f5ff;
+      --muted: #8f90a6;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: radial-gradient(circle at 50% 0%, #1a103c 0%, var(--bg) 70%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px 14px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .app-shell {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 4px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
+    }
+    .brand h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+    .brand p {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .free-badge {
+      background: rgba(0, 255, 136, 0.12);
+      color: var(--success);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .hero-btn {
+      width: 100%;
+      border: none;
+      border-radius: 16px;
+      padding: 18px 16px;
+      background: linear-gradient(135deg, #00f0ff 0%, #7000ff 100%);
+      color: #ffffff;
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 8px 25px rgba(112, 0, 255, 0.5), 0 0 15px rgba(0, 240, 255, 0.4);
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    .hero-btn:active {
+      transform: scale(0.98);
+    }
+    .hero-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .field label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select, input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 12px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      outline: none;
+    }
+    select option {
+      background: #141424;
+      color: #fff;
+    }
+    .custom-topic {
+      margin-top: 10px;
+    }
+    .status-box {
+      display: none;
+      margin-top: 16px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 10%;
+      background: linear-gradient(90deg, var(--primary), var(--success));
+      transition: width 0.35s ease;
+    }
+    .result-card {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .video-frame {
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      max-height: 540px;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      margin: 0 auto;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-secondary {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text);
+      padding: 13px 12px;
+      border-radius: 12px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+      text-align: center;
+    }
+    .btn-share {
+      grid-column: span 2;
+      background: linear-gradient(135deg, #00c853, #009624);
+      border: none;
+      color: #fff;
+      padding: 15px;
+      font-size: 0.96rem;
+      font-weight: 800;
+      border-radius: 14px;
+    }
+    .meta-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .meta-box strong {
+      color: var(--primary);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .history-item h4 {
+      font-size: 0.85rem;
+      margin-bottom: 2px;
+    }
+    .history-item span {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--success);
+      color: #000;
+      font-weight: 800;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      display: none;
+      z-index: 999;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+    <div class="top-bar">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h1>Shorts Factory AI</h1>
+          <p>Gerador Automático YT Shorts & TikTok</p>
+        </div>
+      </div>
+      <span class="free-badge">100% FREE</span>
+    </div>
+
+    <!-- 1-CLICK GENERATOR CARD -->
+    <div class="card">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button id="generateBtn" class="hero-btn" onclick="startGeneration(false)">
+          <span>🚀 GERAR NOVO SHORT INÉDITO (1-CLICK)</span>
+        </button>
+        <button id="newScriptBtn" class="btn-secondary" style="border-color:rgba(0,240,255,0.45); color:#00f0ff; font-weight:800; padding:14px;" onclick="rollNewUniqueScript()">
+          <span>🎲 GERAR ROTEIRO + ✏️ EDITAR NO CELULAR</span>
+        </button>
+      </div>
+
+      <!-- Live Interactive Mobile Script Editor (Melhoria #4) -->
+      <div id="scriptPreviewBox" style="display:none; margin-top:14px; background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.35); border-radius:14px; padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:0.76rem; color:var(--primary); font-weight:900;">✏️ EDITOR DE ROTEIRO & CENAS (TOQUE PARA EDITAR)</span>
+          <button class="btn-secondary" style="padding:5px 10px; font-size:0.72rem;" onclick="rollNewUniqueScript()">🔄 Sortear Outro</button>
+        </div>
+
+        <div class="field" style="margin-bottom:10px;">
+          <label style="color:#00f0ff;">📌 Título Viral (Editável)</label>
+          <input id="editScriptTitle" type="text" style="width:100%; background:#0b0c14; color:#fff; border:1px solid rgba(0,240,255,0.4); border-radius:10px; padding:10px; font-size:0.9rem; font-weight:700;" />
+        </div>
+
+        <div class="field" style="margin-bottom:10px;">
+          <label style="color:#00f0ff;">📝 Descrição SEO (Editável)</label>
+          <textarea id="editScriptDesc" rows="3" style="width:100%; background:#0b0c14; color:#e0e0f5; border:1px solid var(--border); border-radius:10px; padding:10px; font-size:0.8rem; font-family:inherit;"></textarea>
+        </div>
+
+        <div class="field" style="margin-bottom:10px;">
+          <label style="color:#00f0ff;">🏷️ Hashtags (Editáveis)</label>
+          <input id="editScriptTags" type="text" style="width:100%; background:#0b0c14; color:var(--primary); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:0.78rem; font-weight:700;" />
+        </div>
+
+        <div id="previewLoopBridgeBox" style="background:rgba(0,230,118,0.09); border:1px solid rgba(0,230,118,0.45); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.76rem; line-height:1.4;"></div>
+
+        <label style="display:block; font-size:0.75rem; color:#00f0ff; font-weight:800; margin-bottom:8px; text-transform:uppercase;">🎬 Fala da Narradora & Foto de Cada Cena:</label>
+        <div id="previewScriptScenes" style="display:flex; flex-direction:column; gap:10px; font-size:0.8rem; color:#d0d0e8; margin-bottom:12px;"></div>
+
+        <button class="btn-secondary" style="width:100%; margin-bottom:12px; padding:10px; font-size:0.78rem; border-style:dashed; color:#00f0ff;" onclick="addEditorScene()">
+          ➕ Adicionar Nova Cena ao Roteiro
+        </button>
+
+        <button class="hero-btn" style="padding:14px; font-size:0.94rem; background:linear-gradient(135deg, #00c853, #009624);" onclick="startGeneration(true)">
+          🎬 RENDERIZAR VÍDEO COM MEU ROTEIRO EDITADO
+        </button>
+      </div>
+
+      <div class="controls-grid">
+        <div class="field">
+          <label>Nicho do Vídeo</label>
+          <select id="nicheSelect">
+            <option value="curiosidades" selected>🧠 Fatos Curiosos (Fotos Reais)</option>
+            <option value="auto">🎲 Surpreenda-me (Auto)</option>
+            <option value="misterios">🕵️ Mistérios & Casos</option>
+            <option value="motivacao">👑 Mentalidade & Estoicismo</option>
+            <option value="financas">💰 Dinheiro & Riqueza</option>
+            <option value="historia">🏛️ Segredos da História</option>
+            <option value="futuro">🌌 Espaço & Futuro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Voz Feminina Natural (PT-BR)</label>
+          <select id="voiceSelect">
+            <option value="pt-BR-ThalitaMultilingualNeural" selected>👩🎙️ Thalita Ultra-Realista (Humana / Podcast)</option>
+            <option value="en-US-AvaMultilingualNeural">👩🎙️ Ava Multilingual (Suave & Cinematográfica)</option>
+            <option value="en-US-EmmaMultilingualNeural">👩🎙️ Emma Multilingual (Jovem & Conversacional)</option>
+            <option value="pt-BR-FranciscaNeural">👩🎙️ Francisca (Dinâmica Clássica)</option>
+            <option value="pt-BR-AntonioNeural">👨🎙️ Antônio (Masculina Profunda)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field custom-topic">
+        <label>Formato & Monetização</label>
+        <select id="durationSelect">
+          <option value="monetized" selected>💰 TikTok Monetizado (>1 Minuto • 63s-75s + 🔁 Loop Infinito)</option>
+          <option value="short">⚡ Short Rápido (35s-45s • 4 Cenas + 🔁 Loop Infinito)</option>
+        </select>
+      </div>
+
+      <div class="field custom-topic">
+        <label>Tema Opcional (deixe vazio para descobrir temas inéditos)</label>
+        <input id="customTopicInput" type="text" placeholder="Ex: Buracos Negros, Ilha da Queimada Grande..." />
+      </div>
+
+      <!-- Progress Indicator -->
+      <div id="statusBox" class="status-box">
+        <div style="display:flex; justify-content:space-between; font-size:0.82rem; font-weight:700;">
+          <span id="statusText">Iniciando fábrica...</span>
+          <span id="statusPercent">10%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIDEO PREVIEW & MOBILE SHARE/DOWNLOAD CARD -->
+    <div id="resultCard" class="card result-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.78rem; color:var(--success); font-weight:800;">✅ VÍDEO PRONTO • 🔁 LOOP INFINITO ATIVO</span>
+        <span id="videoDurationBadge" style="font-size:0.75rem; color:var(--muted);">9:16 HD</span>
+      </div>
+
+      <div class="video-frame">
+        <video id="shortPlayer" controls loop playsinline></video>
+      </div>
+
+      <div class="action-row">
+        <button id="btnAutoPublishBoth" class="btn-secondary btn-share" style="background:linear-gradient(135deg, #ff0055, #7000ff); border:none;" onclick="autoPublish('both')">
+          🚀 POSTAR AUTOMÁTICO (YOUTUBE + TIKTOK)
+        </button>
+        <button id="btnAutoPublishYT" class="btn-secondary" style="border-color:#ff3d57; color:#ff6b81; font-weight:800;" onclick="autoPublish('youtube')">
+          🔴 Auto-Post YouTube
+        </button>
+        <button id="btnAutoPublishTK" class="btn-secondary" style="border-color:#00f0ff; color:#00f0ff; font-weight:800;" onclick="autoPublish('tiktok')">
+          🎵 Auto-Post TikTok
+        </button>
+        <button class="btn-secondary btn-share" style="background:linear-gradient(135deg, #00c853, #009624);" onclick="shareToPhone()">
+          📲 Abrir App TikTok / YT (Com Kit Já Copiado!)
+        </button>
+        <a id="downloadLink" class="btn-secondary" href="#" download>
+          ⬇️ Baixar .MP4
+        </a>
+        <button class="btn-secondary" style="border-color:var(--primary); color:var(--primary);" onclick="copyCaption()">
+          ⚡ Copiar Kit Completo
+        </button>
+      </div>
+
+      <div id="publishStatusBanner" style="display:none; padding:12px; border-radius:12px; font-size:0.82rem; font-weight:700; line-height:1.45; background:rgba(0,240,255,0.1); border:1px solid var(--primary);"></div>
+
+      <!-- CONEXÃO DO LOOP INFINITO (FINAL -> INÍCIO 0:00) -->
+      <div class="meta-box" style="border-color:rgba(0,230,118,0.45); background:rgba(0,230,118,0.06);">
+        <strong style="color:#00e676; margin-bottom:6px;">🔁 CONEXÃO DO LOOP INFINITO (FINAL ➔ INÍCIO 0:00)</strong>
+        <div id="videoLoopBridgeDisplay" style="font-size:0.8rem; color:#e0ffe8; line-height:1.45;"></div>
+      </div>
+
+      <!-- 1. TÍTULO VIRAL -->
+      <div class="meta-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="margin:0;">📌 TÍTULO (YOUTUBE / TIKTOK)</strong>
+          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('title')">📋 Copiar Título</button>
+        </div>
+        <p id="videoTitleDisplay" style="color:#fff; font-weight:700; font-size:0.95rem;"></p>
+      </div>
+
+      <!-- 2. DESCRIÇÃO ENGAJADORA -->
+      <div class="meta-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="margin:0;">📝 DESCRIÇÃO DO VÍDEO</strong>
+          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('description')">📋 Copiar Descrição</button>
+        </div>
+        <p id="videoDescDisplay" style="color:#d0d0e5; white-space:pre-line;"></p>
+      </div>
+
+      <!-- 3. HASHTAGS VIRAIS -->
+      <div class="meta-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="margin:0;">🏷️ HASHTAGS VIRAIS</strong>
+          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('hashtags')">📋 Copiar Hashtags</button>
+        </div>
+        <p id="videoTagsDisplay" style="color:var(--primary); font-weight:700; word-break:break-word;"></p>
+      </div>
+    </div>
+
+    <!-- CONECTAR CONTAS: YOUTUBE SHORTS & TIKTOK API -->
+    <div class="card" id="accountsCard">
+      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleAccountsPanel()">
+        <div>
+          <h3 style="font-size:0.92rem; margin:0; color:#00f0ff;">🔗 Conectar Contas (YouTube & TikTok Auto-Post)</h3>
+          <p style="font-size:0.73rem; color:var(--muted); margin-top:2px;">Configure os tokens gratuitos para postar 100% automático com Título, Descrição e Hashtags</p>
+        </div>
+        <span id="accountsToggleArrow" style="font-size:0.85rem; color:var(--primary); font-weight:900;">⚙️ Configurar</span>
+      </div>
+
+      <div id="accountsFormBody" style="display:none; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+        <!-- YOUTUBE SHORTS CONFIG -->
+        <div style="background:rgba(255,0,55,0.06); border:1px solid rgba(255,61,87,0.35); border-radius:12px; padding:12px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="font-size:0.82rem; color:#ff6b81;">🔴 YouTube Data API v3 (Shorts Automático)</strong>
+            <a href="https://developers.google.com/oauthplayground/?scope=https://www.googleapis.com/auth/youtube.upload" target="_blank" style="font-size:0.72rem; color:#00f0ff; text-decoration:underline;">🔑 Gerar Token Grátis (1 Min)</a>
+          </div>
+          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
+            Dica Rápida: Clique em <strong>"Gerar Token Grátis"</strong> acima (Google OAuth Playground), autorize sua conta do YouTube no escopo <code>youtube.upload</code>, clique em <em>Exchange authorization code for tokens</em> e cole o <strong>Access Token</strong> (ou Refresh Token + Client ID/Secret) abaixo:
+          </p>
+          <div class="field" style="margin-bottom:8px;">
+            <label>YouTube Access Token (Rápido)</label>
+            <input id="ytAccessToken" type="password" placeholder="ya29.a0AfH6SM..." />
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <div class="field">
+              <label>Client ID (Opcional p/ Permanente)</label>
+              <input id="ytClientId" type="text" placeholder="...apps.googleusercontent.com" />
+            </div>
+            <div class="field">
+              <label>Client Secret (Opcional)</label>
+              <input id="ytClientSecret" type="password" placeholder="GOCSPX-..." />
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px;">
+            <div class="field">
+              <label>Refresh Token (Opcional p/ Nunca Expirar)</label>
+              <input id="ytRefreshToken" type="password" placeholder="1//04..." />
+            </div>
+            <div class="field">
+              <label>Privacidade</label>
+              <select id="ytPrivacyStatus">
+                <option value="public" selected>🌍 Público</option>
+                <option value="unlisted">🔗 Não Listado</option>
+                <option value="private">🔒 Privado</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- TIKTOK API V2 CONFIG -->
+        <div style="background:rgba(0,240,255,0.05); border:1px solid rgba(0,240,255,0.3); border-radius:12px; padding:12px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="font-size:0.82rem; color:#00f0ff;">🎵 TikTok Content Posting API v2</strong>
+            <a href="https://developers.tiktok.com/" target="_blank" style="font-size:0.72rem; color:#00e676; text-decoration:underline;">🔑 Portal TikTok Developers</a>
+          </div>
+          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
+            Cole abaixo seu <strong>Access Token</strong> da API oficial do TikTok (escopo <code>video.publish</code>). <em>Nota: Se preferir não criar conta de desenvolvedor no TikTok, o botão verde <strong>"📲 Abrir App TikTok / YT"</strong> já envia o vídeo pronto com o Título, Descrição e Hashtags copiados automaticamente para colar em 1 toque!</em>
+          </p>
+          <div class="field">
+            <label>TikTok OAuth Access Token</label>
+            <input id="tkAccessToken" type="password" placeholder="act.example..." />
+          </div>
+        </div>
+
+        <button class="hero-btn" style="padding:13px; font-size:0.9rem; background:linear-gradient(135deg, #00c853, #009624); margin-bottom:14px;" onclick="saveConnectedAccounts()">
+          💾 SALVAR CONEXÃO DAS CONTAS
+        </button>
+
+        <!-- GITHUB + VERCEL 1-CLICK CLOUD DEPLOY -->
+        <div style="background:rgba(112,0,255,0.08); border:1px solid rgba(157,78,221,0.45); border-radius:12px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="font-size:0.82rem; color:#d0a2ff;">🐙 Subir Projeto pro Seu GitHub + Vercel (1-Click)</strong>
+            <a href="https://github.com/settings/tokens/new?scopes=repo&description=ShortsFactoryAI" target="_blank" style="font-size:0.72rem; color:#00f0ff; text-decoration:underline;">🔑 Gerar Token GitHub (10s)</a>
+          </div>
+          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
+            Quer hospedar sua própria cópia no GitHub e conectar na Vercel? Clique em <strong>"Gerar Token GitHub"</strong> acima, copie o token (<code>ghp_...</code>), cole abaixo e toque em Enviar: nós criamos o repositório completo na sua conta automaticamente!
+          </p>
+          <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-bottom:8px;">
+            <div class="field">
+              <label>GitHub Personal Access Token (ghp_...)</label>
+              <input id="ghDeployToken" type="password" placeholder="ghp_xxxxxxxxxxxx" />
+            </div>
+            <div class="field">
+              <label>Nome do Repositório</label>
+              <input id="ghRepoName" type="text" value="shorts-factory-ai" />
+            </div>
+          </div>
+          <button id="btnDeployGitHub" class="btn-secondary" style="width:100%; border-color:#d0a2ff; color:#e0c3ff; font-weight:800; padding:11px;" onclick="deployToUserGitHub()">
+            🐙 CRIAR REPOSITÓRIO NO MEU GITHUB + ABRIR VERCEL
+          </button>
+          <div id="ghDeployResultBox" style="display:none; margin-top:10px; padding:10px; border-radius:8px; background:rgba(0,230,118,0.1); border:1px solid #00e676; font-size:0.76rem; line-height:1.45;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GALLERY OF GENERATED VIDEOS -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h3 style="font-size:0.9rem; margin:0;">📂 Últimos Shorts Gerados</h3>
+        <button class="btn-secondary" style="padding:5px 10px; font-size:0.72rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="clearHistoryFromApp()">🗑️ Zerar Histórico</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <p style="font-size:0.8rem; color:var(--muted);">Carregando galeria...</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Copiado com sucesso!</div>
+
+  <script>
+    let currentVideoData = null;
+    let currentPreviewScript = null;
+    let pollTimer = null;
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2600);
+    }
+
+    function escapeHtmlAttr(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function updateLiveLoopBridge() {
+      const narrationInputs = Array.from(document.querySelectorAll('.scene-narration-input'));
+      if (narrationInputs.length === 0) return;
+      const firstNarration = narrationInputs[0].value.trim();
+      const lastNarration = narrationInputs[narrationInputs.length - 1].value.trim();
+
+      const lastSentences = lastNarration.split(/(?<=[.!?])\s+/);
+      const endSnippet = lastSentences[lastSentences.length - 1] || lastNarration.slice(-85);
+      const firstSentences = firstNarration.split(/(?<=[.!?])\s+/);
+      const startSnippet = firstSentences[0] || firstNarration.slice(0, 85);
+
+      if (currentPreviewScript) {
+        currentPreviewScript.loopBridge = { endText: endSnippet, startText: startSnippet };
+      }
+
+      document.getElementById('previewLoopBridgeBox').innerHTML =
+        `<div style="color:#00e676; font-weight:800; margin-bottom:4px;">🔁 Encaixe em Tempo Real do Loop Infinito (Final ➔ Início 0:00):</div>` +
+        `<div><strong>Final da Última Cena:</strong> "${escapeHtmlAttr(endSnippet)}"</div>` +
+        `<div><strong>Início da Cena 1 (0:00):</strong> "${escapeHtmlAttr(startSnippet)}"</div>`;
+    }
+
+    function renderScriptEditor(script) {
+      document.getElementById('scriptPreviewBox').style.display = 'block';
+      document.getElementById('editScriptTitle').value = script.title || '';
+      document.getElementById('editScriptDesc').value = script.description || '';
+      document.getElementById('editScriptTags').value = script.hashtags || '';
+
+      const scenesContainer = document.getElementById('previewScriptScenes');
+      const scenes = script.scenes || [];
+
+      scenesContainer.innerHTML = scenes.map((s, idx) => `
+        <div class="editor-scene-card" style="background:rgba(0,0,0,0.42); border:1px solid rgba(255,255,255,0.12); padding:10px; border-radius:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="color:#00f0ff; font-size:0.78rem;">🎬 Cena ${idx + 1}/${scenes.length} • ${escapeHtmlAttr(s.sceneLabel || 'Cena')}</strong>
+            ${scenes.length > 2 ? `<button type="button" class="btn-secondary" style="padding:3px 8px; font-size:0.68rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="removeEditorScene(${idx})">🗑️ Excluir</button>` : ''}
+          </div>
+          <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">🎙️ Fala da Narradora (Voz Feminina Natural):</label>
+          <textarea class="scene-narration-input" rows="3" oninput="updateLiveLoopBridge()" style="width:100%; background:#07080d; color:#fff; border:1px solid rgba(0,240,255,0.28); border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
+          <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">📸 Busca da Foto Real (Wikipédia / Wikimedia):</label>
+          <input type="text" class="scene-photo-input" value="${escapeHtmlAttr(s.imageQuery || script.sourceTopic || '')}" style="width:100%; background:#07080d; color:#b8eaff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:7px; font-size:0.76rem;" />
+        </div>
+      `).join('');
+
+      updateLiveLoopBridge();
+    }
+
+    function syncCurrentScriptFromInputs() {
+      if (!currentPreviewScript) return null;
+      const title = document.getElementById('editScriptTitle').value.trim() || currentPreviewScript.title;
+      const description = document.getElementById('editScriptDesc').value.trim() || currentPreviewScript.description;
+      const hashtags = document.getElementById('editScriptTags').value.trim() || currentPreviewScript.hashtags;
+      const narrationEls = Array.from(document.querySelectorAll('.scene-narration-input'));
+      const photoEls = Array.from(document.querySelectorAll('.scene-photo-input'));
+
+      const updatedScenes = narrationEls.map((el, idx) => {
+        const orig = (currentPreviewScript.scenes && currentPreviewScript.scenes[idx]) || {};
+        return {
+          ...orig,
+          narration: el.value.trim() || orig.narration || 'Fato curioso impressionante.',
+          imageQuery: (photoEls[idx] && photoEls[idx].value.trim()) || orig.imageQuery || title,
+          sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${title.slice(0, 28)}`
+        };
+      });
+
+      currentPreviewScript = {
+        ...currentPreviewScript,
+        title,
+        description,
+        hashtags,
+        caption: `${description}\n\n${hashtags}`,
+        scenes: updatedScenes
+      };
+      updateLiveLoopBridge();
+      return currentPreviewScript;
+    }
+
+    function addEditorScene() {
+      syncCurrentScriptFromInputs();
+      if (!currentPreviewScript) return;
+      const nextNum = (currentPreviewScript.scenes || []).length + 1;
+      currentPreviewScript.scenes.push({
+        narration: `Outro detalhe impressionante que pouca gente conhece sobre ${currentPreviewScript.sourceTopic || 'esse tema'} é como ele acontece na natureza.`,
+        imageQuery: `${currentPreviewScript.sourceTopic || 'science'} nature photo`,
+        sceneLabel: `${nextNum}/${nextNum} • Detalhe Extra`
+      });
+      renderScriptEditor(currentPreviewScript);
+      showToast('➕ Nova cena adicionada ao roteiro!');
+    }
+
+    function removeEditorScene(idx) {
+      syncCurrentScriptFromInputs();
+      if (!currentPreviewScript || !Array.isArray(currentPreviewScript.scenes) || currentPreviewScript.scenes.length <= 2) return;
+      currentPreviewScript.scenes.splice(idx, 1);
+      renderScriptEditor(currentPreviewScript);
+      showToast('🗑️ Cena removida do roteiro!');
+    }
+
+    async function rollNewUniqueScript() {
+      const btn = document.getElementById('newScriptBtn');
+      const niche = document.getElementById('nicheSelect').value;
+      const durationMode = document.getElementById('durationSelect').value;
+      const customTopic = document.getElementById('customTopicInput').value;
+
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳ Buscando Fato Curioso Inédito (1 Min+)...</span>';
+
+      try {
+        const res = await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ niche, customTopic, durationMode })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.script) {
+          throw new Error(data.error || 'Erro ao criar roteiro');
+        }
+
+        currentPreviewScript = data.script;
+        renderScriptEditor(currentPreviewScript);
+        showToast('✏️ Roteiro carregado no Editor! Você pode editar qualquer frase ou cena.');
+      } catch (err) {
+        alert('Erro: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🎲 GERAR ROTEIRO + ✏️ EDITAR NO CELULAR</span>';
+      }
+    }
+
+    async function startGeneration(usePreviewedScript = false) {
+      const btn = document.getElementById('generateBtn');
+      const statusBox = document.getElementById('statusBox');
+      const niche = document.getElementById('nicheSelect').value;
+      const voice = document.getElementById('voiceSelect').value;
+      const durationMode = document.getElementById('durationSelect').value;
+      const customTopic = document.getElementById('customTopicInput').value;
+
+      const editedScript = usePreviewedScript ? syncCurrentScriptFromInputs() : null;
+
+      btn.disabled = true;
+      statusBox.style.display = 'block';
+      updateProgress(8, usePreviewedScript ? 'Gravando seu roteiro editado com Voz Feminina Natural 👩🎙️...' : 'Descobrindo novo fato curioso + Voz Feminina Natural 👩🎙️...');
+
+      try {
+        const payload = {
+          niche,
+          voice,
+          durationMode,
+          customTopic,
+          scriptOverride: editedScript
+        };
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro ao iniciar geração');
+        }
+
+        if (data.directResult) {
+          btn.disabled = false;
+          statusBox.style.display = 'none';
+          displayVideoResult(data.directResult);
+          loadHistoryGallery();
+          return;
+        }
+
+        if (!data.jobId) {
+          throw new Error(data.error || 'Erro ao iniciar geração');
+        }
+
+        pollJobStatus(data.jobId);
+      } catch (err) {
+        alert('Erro: ' + err.message);
+        btn.disabled = false;
+        statusBox.style.display = 'none';
+      }
+    }
+
+    async function deployToUserGitHub() {
+      const token = document.getElementById('ghDeployToken').value.trim();
+      const repoName = document.getElementById('ghRepoName').value.trim() || 'shorts-factory-ai';
+      const btn = document.getElementById('btnDeployGitHub');
+      const box = document.getElementById('ghDeployResultBox');
+
+      if (!token) {
+        alert('Cole seu GitHub Token (ghp_...) primeiro! Clique em "🔑 Gerar Token GitHub (10s)" para criar um.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Criando repositório e enviando todos os arquivos pro GitHub...';
+      box.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            niche: '__deploy_github__',
+            customTopic: JSON.stringify({ token, repoName })
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Erro ao publicar no GitHub');
+        }
+        const info = data.script;
+        box.style.display = 'block';
+        box.innerHTML =
+          `✅ <strong>Repositório criado e atualizado no seu GitHub!</strong><br>` +
+          `📦 GitHub: <a href="${info.repoUrl}" target="_blank" style="color:#00f0ff; text-decoration:underline;">${info.repoUrl}</a><br><br>` +
+          `<a href="${info.vercelImportUrl}" target="_blank" style="display:inline-block; background:#fff; color:#000; font-weight:900; padding:8px 14px; border-radius:8px; text-decoration:none; margin-right:6px;">▲ Importar na Vercel em 1 Clique</a>` +
+          `<a href="${info.renderImportUrl}" target="_blank" style="display:inline-block; background:#00e676; color:#000; font-weight:900; padding:8px 14px; border-radius:8px; text-decoration:none;">☁️ Importar no Render (Sem Limite 60s)</a>`;
+        showToast('🐙 Código enviado pro seu GitHub com sucesso!');
+      } catch (err) {
+        alert('Erro no GitHub: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🐙 CRIAR REPOSITÓRIO NO MEU GITHUB + ABRIR VERCEL';
+      }
+    }
+
+    function updateProgress(percent, text) {
+      document.getElementById('statusPercent').textContent = percent + '%';
+      document.getElementById('statusText').textContent = text;
+      document.getElementById('progressFill').style.width = percent + '%';
+    }
+
+    function pollJobStatus(jobId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch('/api/status/' + jobId);
+          const job = await res.json();
+
+          if (job.status === 'running') {
+            updateProgress(job.progress || 25, job.message || 'Processando...');
+          } else if (job.status === 'done') {
+            clearInterval(pollTimer);
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('statusBox').style.display = 'none';
+            displayVideoResult(job.result);
+            loadHistoryGallery();
+          } else if (job.status === 'error') {
+            clearInterval(pollTimer);
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('statusBox').style.display = 'none';
+            alert('Erro ao renderizar: ' + job.error);
+          }
+        } catch (e) {}
+      }, 1500);
+    }
+
+    function extractSeoMetadata(video) {
+      const title = video.title || 'Fato Curioso Impressionante';
+      let description = video.description || '';
+      let hashtags = video.hashtags || '';
+      if ((!description || !hashtags) && video.caption) {
+        const parts = video.caption.split(/(?=#)/);
+        if (!description) description = (parts[0] || '').trim();
+        if (!hashtags) {
+          const m = video.caption.match(/#[\wÀ-ÿ]+/g);
+          hashtags = m ? m.join(' ') : '#fatoscuriosos #curiosidades #shorts #fyp';
+        }
+      }
+      return { title, description, hashtags };
+    }
+
+    function displayVideoResult(video) {
+      currentVideoData = video;
+      const card = document.getElementById('resultCard');
+      const player = document.getElementById('shortPlayer');
+      const dl = document.getElementById('downloadLink');
+
+      card.style.display = 'flex';
+      player.src = video.url;
+      player.load();
+      player.play().catch(() => {});
+
+      dl.href = video.url;
+      dl.download = (video.title || 'short').replace(/[^\wÀ-ÿ\-]+/g, '_').slice(0, 35) + '.mp4';
+
+      const seo = extractSeoMetadata(video);
+      document.getElementById('videoTitleDisplay').textContent = seo.title;
+      document.getElementById('videoDescDisplay').textContent = seo.description;
+      document.getElementById('videoTagsDisplay').textContent = seo.hashtags;
+      document.getElementById('videoDurationBadge').textContent = (video.duration || 65) + 's • 9:16 HD • 🔁 Loop';
+
+      const lb = video.loopBridge || {
+        endText: 'Mas o motivo mais chocante de todos é que...',
+        startText: `...quase ninguém no mundo percebe o verdadeiro segredo por trás de ${seo.title}!`
+      };
+      document.getElementById('videoLoopBridgeDisplay').innerHTML =
+        `<div style="margin-bottom:4px;"><strong>Final do Vídeo:</strong> <span style="color:#00f0ff;">"${lb.endText}"</span></div>` +
+        `<div style="margin-bottom:4px;"><strong>Início (0:00):</strong> <span style="color:#00e676;">"${lb.startText}"</span></div>` +
+        `<div style="font-size:0.72rem; color:#a8d5ba;">✨ Silêncio morto removido (corte acústico de 60ms) + Mesma foto da Cena 1 nos segundos finais!</div>`;
+
+      card.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function copyField(field) {
+      if (!currentVideoData) return;
+      const seo = extractSeoMetadata(currentVideoData);
+      const val = seo[field] || '';
+      const labels = { title: '📌 Título copiado!', description: '📝 Descrição copiada!', hashtags: '🏷️ Hashtags copiadas!' };
+      try {
+        await navigator.clipboard.writeText(val);
+        showToast(labels[field] || 'Copiado!');
+      } catch (e) {
+        showToast('Copie manualmente abaixo!');
+      }
+    }
+
+    async function copyCaption() {
+      if (!currentVideoData) return;
+      const seo = extractSeoMetadata(currentVideoData);
+      const fullText = `${seo.title}\n\n${seo.description}\n\n${seo.hashtags}`;
+      try {
+        await navigator.clipboard.writeText(fullText);
+        showToast('⚡ Kit Completo (Título + Descrição + Hashtags) copiado!');
+      } catch (e) {
+        showToast('Copie manualmente abaixo!');
+      }
+    }
+
+    async function shareToPhone() {
+      if (!currentVideoData) return;
+      // Copy caption automatically so user already has it in clipboard when TikTok/YouTube opens!
+      await copyCaption();
+
+      try {
+        const response = await fetch(currentVideoData.url);
+        const blob = await response.blob();
+        const file = new File([blob], 'short_viral.mp4', { type: 'video/mp4' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: currentVideoData.title,
+            text: `${currentVideoData.title}\n\n${currentVideoData.caption}`,
+            files: [file]
+          });
+          return;
+        }
+      } catch (err) {
+        console.log('Native file share fallback:', err);
+      }
+
+      // Fallback: trigger direct download
+      document.getElementById('downloadLink').click();
+    }
+
+    async function clearHistoryFromApp() {
+      if (!confirm('Deseja zerar todo o histórico de vídeos e temas usados?')) return;
+      try {
+        await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ niche: '__clear_history__' })
+        });
+        document.getElementById('resultCard').style.display = 'none';
+        currentVideoData = null;
+        await loadHistoryGallery();
+        showToast('🗑️ Histórico zerado com sucesso!');
+      } catch (e) {
+        alert('Erro ao zerar histórico');
+      }
+    }
+
+    function toggleAccountsPanel() {
+      const body = document.getElementById('accountsFormBody');
+      const arrow = document.getElementById('accountsToggleArrow');
+      if (body.style.display === 'none') {
+        body.style.display = 'block';
+        arrow.textContent = '🔼 Fechar';
+        loadConnectedAccounts();
+      } else {
+        body.style.display = 'none';
+        arrow.textContent = '⚙️ Configurar';
+      }
+    }
+
+    async function loadConnectedAccounts() {
+      try {
+        const res = await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ niche: '__get_accounts__' })
+        });
+        const data = await res.json();
+        const cfg = data.script || {};
+        if (cfg.youtube) {
+          document.getElementById('ytAccessToken').value = cfg.youtube.accessToken || '';
+          document.getElementById('ytClientId').value = cfg.youtube.clientId || '';
+          document.getElementById('ytClientSecret').value = cfg.youtube.clientSecret || '';
+          document.getElementById('ytRefreshToken').value = cfg.youtube.refreshToken || '';
+          document.getElementById('ytPrivacyStatus').value = cfg.youtube.privacyStatus || 'public';
+        }
+        if (cfg.tiktok) {
+          document.getElementById('tkAccessToken').value = cfg.tiktok.accessToken || '';
+        }
+      } catch (e) {}
+    }
+
+    async function saveConnectedAccounts() {
+      const payload = {
+        youtube: {
+          accessToken: document.getElementById('ytAccessToken').value.trim(),
+          clientId: document.getElementById('ytClientId').value.trim(),
+          clientSecret: document.getElementById('ytClientSecret').value.trim(),
+          refreshToken: document.getElementById('ytRefreshToken').value.trim(),
+          privacyStatus: document.getElementById('ytPrivacyStatus').value
+        },
+        tiktok: {
+          accessToken: document.getElementById('tkAccessToken').value.trim(),
+          privacyLevel: 'PUBLIC_TO_EVERYONE'
+        }
+      };
+
+      try {
+        const res = await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            niche: '__save_accounts__',
+            customTopic: JSON.stringify(payload)
+          })
+        });
+        if (res.ok) {
+          showToast('✅ Contas conectadas e salvas com sucesso!');
+          document.getElementById('accountsFormBody').style.display = 'none';
+          document.getElementById('accountsToggleArrow').textContent = '✅ Conectado';
+        }
+      } catch (e) {
+        alert('Erro ao salvar contas: ' + e.message);
+      }
+    }
+
+    async function autoPublish(platform) {
+      if (!currentVideoData) return;
+      const banner = document.getElementById('publishStatusBanner');
+      banner.style.display = 'block';
+      banner.style.borderColor = '#00f0ff';
+      banner.style.color = '#ffffff';
+      banner.innerHTML = `⏳ Enviando <strong>"${currentVideoData.title}"</strong> automaticamente com Título, Descrição e Hashtags para <strong>${platform.toUpperCase()}</strong>...`;
+
+      // Also copy full kit to clipboard automatically as backup
+      await copyCaption();
+
+      try {
+        const res = await fetch('/api/new-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            niche: '__publish_video__',
+            customTopic: JSON.stringify({
+              platform,
+              video: currentVideoData
+            })
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Configure suas chaves no painel "🔗 Conectar Contas" abaixo.');
+        }
+
+        const result = data.script || {};
+        if (platform === 'youtube' && result.url) {
+          banner.style.borderColor = '#00e676';
+          banner.innerHTML = `✅ <strong>PUBLICADO NO YOUTUBE SHORTS COM SUCESSO!</strong><br>🔗 <a href="${result.url}" target="_blank" style="color:#00e676; text-decoration:underline;">Abrir Short no YouTube (${result.url})</a>`;
+          showToast('🚀 Publicado no YouTube Shorts!');
+        } else if (platform === 'tiktok' && result.publishId) {
+          banner.style.borderColor = '#00e676';
+          banner.innerHTML = `✅ <strong>ENVIADO PARA O TIKTOK COM SUCESSO!</strong> (Publish ID: <code>${result.publishId}</code>)`;
+          showToast('🚀 Publicado no TikTok!');
+        } else if (platform === 'both') {
+          let html = '';
+          if (result.youtube?.url) {
+            html += `✅ <strong>YouTube Shorts:</strong> <a href="${result.youtube.url}" target="_blank" style="color:#00e676;">${result.youtube.url}</a><br>`;
+          } else if (result.youtubeError) {
+            html += `⚠️ <strong>YouTube:</strong> ${result.youtubeError}<br>`;
+          }
+          if (result.tiktok?.publishId) {
+            html += `✅ <strong>TikTok:</strong> Publicado com sucesso (ID: ${result.tiktok.publishId})`;
+          } else if (result.tiktokError) {
+            html += `⚠️ <strong>TikTok:</strong> ${result.tiktokError}`;
+          }
+          banner.innerHTML = html;
+          if (!result.youtube?.url && !result.tiktok?.publishId) {
+            document.getElementById('accountsFormBody').style.display = 'block';
+            document.getElementById('accountsCard').scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      } catch (err) {
+        banner.style.borderColor = '#ffab00';
+        banner.innerHTML = `⚠️ <strong>Conexão de API Pendente:</strong> ${err.message}<br><span style="font-size:0.75rem; color:#d0d0e8;">👉 Configure seu token gratuito no card <strong>"🔗 Conectar Contas"</strong> abaixo, ou toque em <strong>"📲 Abrir App TikTok / YT"</strong> (já copiamos o Título, Descrição e Hashtags para sua área de transferência!).</span>`;
+        document.getElementById('accountsFormBody').style.display = 'block';
+      }
+    }
+
+    async function loadHistoryGallery() {
+      try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        const container = document.getElementById('historyList');
+
+        if (!data.videos || data.videos.length === 0) {
+          container.innerHTML = '<p style="font-size:0.8rem; color:var(--muted);">Nenhum vídeo gerado ainda. Clique no botão acima para criar o primeiro!</p>';
+          return;
+        }
+
+        container.innerHTML = data.videos.slice(0, 10).map((v, i) => `
+          <div class="history-item" onclick='displayVideoResult(${JSON.stringify(v).replace(/'/g, "&#39;")})'>
+            <div>
+              <h4>${v.title}</h4>
+              <span>${v.badge || '🔥 Short'} &bull; ${v.duration || 25}s</span>
+            </div>
+            <span style="color:var(--primary); font-weight:800; font-size:0.82rem;">▶️ Abrir</span>
+          </div>
+        `).join('');
+
+        if (!currentVideoData && data.videos.length > 0) {
+          displayVideoResult(data.videos[0]);
+        }
+      } catch (e) {}
+    }
+
+    loadHistoryGallery();
+  </script>
+</body>
+</html>
