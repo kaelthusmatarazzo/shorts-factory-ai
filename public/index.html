@@ -703,6 +703,15 @@
       }
     }
 
+    async function safeJson(res) {
+      const txt = await res.text();
+      try {
+        return JSON.parse(txt);
+      } catch (e) {
+        throw new Error(`O servidor da nuvem demorou mais de 60s ou retornou erro (${res.status}). Atualize o repositório no GitHub para ativar o Modo Paralelo Ultra-Rápido (18s)!`);
+      }
+    }
+
     async function startGeneration(usePreviewedScript = false) {
       const btn = document.getElementById('generateBtn');
       const statusBox = document.getElementById('statusBox');
@@ -715,7 +724,22 @@
 
       btn.disabled = true;
       statusBox.style.display = 'block';
-      updateProgress(8, usePreviewedScript ? 'Gravando seu roteiro editado com Voz Feminina Natural 👩🎙️...' : 'Descobrindo novo fato curioso + Voz Feminina Natural 👩🎙️...');
+      updateProgress(12, usePreviewedScript ? 'Gravando seu roteiro editado em paralelo (Voz Thalita 👩🎙️)...' : 'Gerando 7 cenas em paralelo (Voz Thalita 👩🎙️ + 7 Fotos Reais)...');
+
+      // Smooth progress ticker for synchronous Vercel Serverless execution
+      let simPct = 14;
+      const simTimer = setInterval(() => {
+        if (simPct < 92) {
+          simPct += 4;
+          const msgs = [
+            'Baixando 7 fotos reais únicas da Wikipédia em paralelo...',
+            'Gravando voz feminina Thalita Multilingual Neural (WordBoundary)...',
+            'Renderizando quadros HD com Loop Infinito 🔁...',
+            'Mixando efeitos sonoros + corte acústico sem pausa (FFmpeg)...'
+          ];
+          updateProgress(simPct, msgs[Math.min(3, Math.floor((simPct - 14) / 20))]);
+        }
+      }, 2200);
 
       try {
         const payload = {
@@ -730,7 +754,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        clearInterval(simTimer);
+        const data = await safeJson(res);
 
         if (!res.ok) {
           throw new Error(data.error || 'Erro ao iniciar geração');
@@ -750,6 +775,7 @@
 
         pollJobStatus(data.jobId);
       } catch (err) {
+        clearInterval(simTimer);
         alert('Erro: ' + err.message);
         btn.disabled = false;
         statusBox.style.display = 'none';
@@ -757,7 +783,7 @@
     }
 
     async function deployToUserGitHub() {
-      const token = document.getElementById('ghDeployToken').value.trim();
+      let token = document.getElementById('ghDeployToken').value.trim() || localStorage.getItem('sf_gh_token') || '';
       const repoName = document.getElementById('ghRepoName').value.trim() || 'shorts-factory-ai';
       const btn = document.getElementById('btnDeployGitHub');
       const box = document.getElementById('ghDeployResultBox');
@@ -766,6 +792,8 @@
         alert('Cole seu GitHub Token (ghp_...) primeiro! Clique em "🔑 Gerar Token GitHub (10s)" para criar um.');
         return;
       }
+      localStorage.setItem('sf_gh_token', token);
+      document.getElementById('ghDeployToken').value = token;
 
       btn.disabled = true;
       btn.textContent = '⏳ Criando repositório e enviando todos os arquivos pro GitHub...';
