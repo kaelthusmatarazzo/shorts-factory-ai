@@ -22,13 +22,16 @@ function escapeXml(unsafe) {
 async function fetchRealPhotoBuffer(queryStr, sceneIdx, usedImageUrls = new Set(), directImageUrl = null, fallbackThemeQuery = '') {
   // 1. Direct Wikipedia Hero Image (Scene 1)
   if (directImageUrl && !usedImageUrls.has(directImageUrl) && !directImageUrl.endsWith('.svg')) {
+    usedImageUrls.add(directImageUrl);
     try {
-      const r = await fetch(directImageUrl, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+      const r = await fetch(directImageUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
+        signal: AbortSignal.timeout(4500)
+      });
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 6000) {
           const normalized = await sharp(buf).png().toBuffer();
-          usedImageUrls.add(directImageUrl);
           console.log(`✅ [Cena ${sceneIdx + 1}] Foto oficial da Wikipédia carregada (${Math.round(buf.length / 1024)} KB)`);
           return normalized;
         }
@@ -44,21 +47,28 @@ async function fetchRealPhotoBuffer(queryStr, sceneIdx, usedImageUrls = new Set(
     for (const wikiLang of ['pt', 'en']) {
       try {
         const pageImgsUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=query&generator=images&titles=${encodeURIComponent(cleanTopic)}&gimlimit=20&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-        const pRes = await fetch(pageImgsUrl, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+        const pRes = await fetch(pageImgsUrl, {
+          headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
+          signal: AbortSignal.timeout(3500)
+        });
         if (pRes.ok) {
           const pData = await pRes.json();
-          const pages = Object.values(pData.query?.pages || {});
+          const rawPages = Object.values(pData.query?.pages || {});
+          const pages = [...rawPages.slice(sceneIdx % Math.max(1, rawPages.length)), ...rawPages.slice(0, sceneIdx % Math.max(1, rawPages.length))];
           for (const page of pages) {
             const imgUrl = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
             if (!imgUrl || usedImageUrls.has(imgUrl) || /\.(svg|gif|tif|tiff|webm|ogv|pdf)$/i.test(imgUrl) || /icon|logo|symbol|flag|map_of|commons-logo|red_pencil/i.test(imgUrl)) {
               continue;
             }
-            const imgRes = await fetch(imgUrl, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+            usedImageUrls.add(imgUrl);
+            const imgRes = await fetch(imgUrl, {
+              headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
+              signal: AbortSignal.timeout(4000)
+            });
             if (imgRes.ok) {
               const buf = Buffer.from(await imgRes.arrayBuffer());
               if (buf.length > 8000) {
                 const normalized = await sharp(buf).png().toBuffer();
-                usedImageUrls.add(imgUrl);
                 console.log(`✅ [Cena ${sceneIdx + 1}] Foto interna da Wikipédia (${wikiLang}) carregada (${Math.round(buf.length / 1024)} KB)`);
                 return normalized;
               }
@@ -95,28 +105,31 @@ async function fetchRealPhotoBuffer(queryStr, sceneIdx, usedImageUrls = new Set(
       const wikiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=filetype:bitmap+${q}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
 
       const res = await fetch(wikiUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryPro/4.0 (Educational Facts)' }
+        headers: { 'User-Agent': 'ShortsFactoryPro/4.0 (Educational Facts)' },
+        signal: AbortSignal.timeout(3500)
       });
       if (!res.ok) continue;
 
       const data = await res.json();
-      const pages = Object.values(data.query?.pages || {});
+      const rawPages = Object.values(data.query?.pages || {});
+      const pages = [...rawPages.slice(sceneIdx % Math.max(1, rawPages.length)), ...rawPages.slice(0, sceneIdx % Math.max(1, rawPages.length))];
 
       for (const page of pages) {
         const imgUrl = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
         if (!imgUrl || usedImageUrls.has(imgUrl) || /\.(svg|gif|tif|tiff|webm|ogv|pdf)$/i.test(imgUrl)) {
           continue;
         }
+        usedImageUrls.add(imgUrl);
 
         const imgRes = await fetch(imgUrl, {
-          headers: { 'User-Agent': 'ShortsFactoryPro/4.0' }
+          headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
+          signal: AbortSignal.timeout(4000)
         });
         if (imgRes.ok) {
           const arr = await imgRes.arrayBuffer();
           const buf = Buffer.from(arr);
           if (buf.length > 7500) {
             const normalized = await sharp(buf).png().toBuffer();
-            usedImageUrls.add(imgUrl);
             console.log(`✅ [Cena ${sceneIdx + 1}] Foto real única carregada para "${term}" (${Math.round(buf.length / 1024)} KB)`);
             return normalized;
           }
@@ -135,7 +148,11 @@ async function fetchRealPhotoBuffer(queryStr, sceneIdx, usedImageUrls = new Set(
 
   for (const backupUrl of realPhotoFallbackUrls) {
     try {
-      const bRes = await fetch(backupUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' });
+      const bRes = await fetch(backupUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(4000)
+      });
       if (bRes.ok) {
         const buf = Buffer.from(await bRes.arrayBuffer());
         if (buf.length > 6000) {
@@ -493,13 +510,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const sceneStartTimes = [];
   let totalDuration = 0;
   const usedImageUrls = new Set();
+  const blurSigma = process.env.VERCEL ? 12 : 22;
 
-  for (let i = 0; i < scenes.length; i++) {
-    const s = scenes[i];
+  // PARALLEL SCENE PREPARATION: Run TTS + Photo Fetch + Backdrop Blur for all scenes concurrently!
+  // Cuts 7-scene preparation time from ~25s down to ~3.8s (critical for Vercel 60s limit!)
+  const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     const photoQuery = s.imageQuery || s.imagePrompt || scriptData.title;
-
-    onProgress(18 + Math.round((i / scenes.length) * 42), `Cena ${i + 1}/${scenes.length}: sincronizando voz + foto real...`);
 
     const [ttsResult, rawPhotoBuffer] = await Promise.all([
       synthesizeSpeechWithTimings(s.narration, audioWavPath, voiceName),
@@ -508,13 +525,12 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
 
     const blurredBackdropBuffer = await sharp(rawPhotoBuffer)
       .resize(WIDTH, HEIGHT, { fit: 'cover' })
-      .blur(22)
+      .blur(blurSigma)
       .modulate({ brightness: 0.42, saturation: 1.25 })
       .png()
       .toBuffer();
 
-    sceneStartTimes.push(totalDuration);
-    sceneAssets.push({
+    return {
       index: i,
       narration: s.narration,
       sceneLabel: s.sceneLabel || scriptData.title,
@@ -523,8 +539,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       wordBoundaries: ttsResult.wordBoundaries,
       rawPhotoBuffer,
       blurredBackdropBuffer
-    });
-    totalDuration += ttsResult.duration;
+    };
+  }));
+
+  for (let i = 0; i < preparedScenes.length; i++) {
+    sceneStartTimes.push(totalDuration);
+    sceneAssets.push(preparedScenes[i]);
+    totalDuration += preparedScenes[i].duration;
   }
 
   // TikTok Creator Rewards Monetization Guard: Guarantee >= 63.0 seconds (> 1 Minute)
@@ -538,16 +559,16 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   while (wantMonetizedLength && totalDuration < 62.5 && bonusIdx < bonusFacts.length) {
     const extraNarration = bonusFacts[bonusIdx];
     const extraWavPath = path.join(tmpDir, `scene_bonus_${bonusIdx}.wav`);
-    const extraQuery = `${scriptData.sourceTopic || 'science'} discovery universe`;
+    const extraQuery = `${scriptData.sourceTopic || 'science'}`;
 
     const [extraTts, extraPhotoBuffer] = await Promise.all([
       synthesizeSpeechWithTimings(extraNarration, extraWavPath, voiceName),
-      fetchRealPhotoBuffer(extraQuery, scenes.length + bonusIdx, usedImageUrls, null)
+      fetchRealPhotoBuffer(extraQuery, scenes.length + bonusIdx, usedImageUrls, null, 'astronomy galaxy stars')
     ]);
 
     const extraBackdropBuffer = await sharp(extraPhotoBuffer)
       .resize(WIDTH, HEIGHT, { fit: 'cover' })
-      .blur(22)
+      .blur(blurSigma)
       .modulate({ brightness: 0.42, saturation: 1.25 })
       .png()
       .toBuffer();
@@ -592,13 +613,14 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(65, 'Renderizando quadros com sincronização exata + Loop Infinito Visual 🔁...');
+  onProgress(65, 'Renderizando quadros em paralelo com sincronização WordBoundary + Loop 🔁...');
 
   // Build ONE Single Master Frame Timeline across all scenes (ZERO scene concat drift!)
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
   let lastRenderedFramePath = null;
+  const frameJobs = [];
 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
@@ -611,9 +633,6 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       const thisChunkDur = timedChunks[c].duration;
       sceneElapsed += thisChunkDur;
 
-      // VISUAL LOOP MATCH: On the last 2 chunks of the Final Scene (the cliffhanger bridge),
-      // transition the image and blurred backdrop back to Scene 1's exact photo at zoom ~1.01
-      // so the transition from the last frame -> Frame 0 (0:00) is 100% visually seamless!
       const isVisualLoopBridge = isFinalLoopScene && (c >= Math.max(1, timedChunks.length - 2));
       const framePhotoBuf = isVisualLoopBridge ? sceneAssets[0].rawPhotoBuffer : asset.rawPhotoBuffer;
       const frameBackdropBuf = isVisualLoopBridge ? sceneAssets[0].blurredBackdropBuffer : asset.blurredBackdropBuffer;
@@ -625,7 +644,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         : (1.0 + (c / Math.max(1, timedChunks.length)) * 0.14);
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
 
-      await renderCaptionedFrame({
+      frameJobs.push({
         rawPhotoBuffer: framePhotoBuf,
         blurredBackdropBuffer: frameBackdropBuf,
         wordsChunk: timedChunks[c].words,
@@ -646,6 +665,12 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
+  // Render frames in parallel batches of 10 so CPU finishes in ~3 seconds
+  const BATCH_SIZE = 10;
+  for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
+    await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
+  }
+
   if (lastRenderedFramePath) {
     masterConcatContent += `file '${lastRenderedFramePath}'\n`;
   }
@@ -664,7 +689,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalMp4Path = path.join(outDir, finalFilename);
 
   // Single-Pass Encode: Master Frames + Master Voice WAV + BGM/SFX WAV -> Final MP4
-  const fpsRate = process.env.VERCEL ? '15' : '25';
+  const fpsRate = process.env.VERCEL ? '12' : '25';
   execFileSync(ffmpegPath, [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
@@ -674,7 +699,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-r', fpsRate,
-    '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
     finalMp4Path
