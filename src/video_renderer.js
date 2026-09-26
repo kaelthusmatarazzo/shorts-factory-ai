@@ -3,19 +3,87 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const sharp = require('sharp');
+const opentype = require('opentype.js');
 
 const WIDTH = 720;
 const HEIGHT = 1280;
 const CARD_W = 640;
 const CARD_H = 480;
 
-function escapeXml(unsafe) {
-  return String(unsafe || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+// Load bundled Hormozi-Black.ttf (Arial Black) once so SVG text is converted into pure <path d="..." /> vector curves!
+// This guarantees 100% identical, razor-sharp Portuguese subtitles on Vercel Linux without needing OS system fonts!
+const FONT_FILE = path.join(__dirname, 'fonts', 'Hormozi-Black.ttf');
+const fontRawBuf = fs.readFileSync(FONT_FILE);
+const hormoziFont = opentype.parse(fontRawBuf.buffer.slice(fontRawBuf.byteOffset, fontRawBuf.byteOffset + fontRawBuf.byteLength));
+
+function cleanDisplayString(str) {
+  return String(str || '')
+    .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}]/gu, '')
+    .replace(/•/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderCenteredVectorPath(rawText, centerX, baselineY, targetFontSize, maxPixelWidth, fill, stroke = null, strokeWidth = 0) {
+  const text = cleanDisplayString(rawText);
+  if (!text) return '';
+  let fontSize = targetFontSize;
+  const measured = hormoziFont.getAdvanceWidth(text, fontSize);
+  if (measured > maxPixelWidth && measured > 0) {
+    fontSize = Math.max(12, Math.floor(fontSize * (maxPixelWidth / measured)));
+  }
+  const actualW = hormoziFont.getAdvanceWidth(text, fontSize);
+  const startX = centerX - (actualW / 2);
+  const d = hormoziFont.getPath(text, startX, baselineY, fontSize).toPathData(1);
+  if (stroke && strokeWidth > 0) {
+    return `<path d="${d}" fill="#000000" stroke="#000000" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round"/><path d="${d}" fill="${fill}"/>`;
+  }
+  return `<path d="${d}" fill="${fill}"/>`;
+}
+
+function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 576) {
+  const cleanedItems = lineItems
+    .map(item => ({ word: cleanDisplayString(item.word).toUpperCase(), isHighlighted: item.isHighlighted }))
+    .filter(item => item.word.length > 0);
+
+  if (cleanedItems.length === 0) return '';
+
+  let fontSize = targetFontSize;
+  const computeTotalWidth = (fSize) => {
+    const spaceW = fSize * 0.28;
+    let total = 0;
+    cleanedItems.forEach((it, idx) => {
+      total += hormoziFont.getAdvanceWidth(it.word, fSize);
+      if (idx < cleanedItems.length - 1) total += spaceW;
+    });
+    return total;
+  };
+
+  let totalWidth = computeTotalWidth(fontSize);
+  if (totalWidth > maxPixelWidth && totalWidth > 0) {
+    fontSize = Math.max(22, Math.floor(fontSize * (maxPixelWidth / totalWidth)));
+    totalWidth = computeTotalWidth(fontSize);
+  }
+
+  const spaceW = fontSize * 0.28;
+  let curX = centerX - (totalWidth / 2);
+  let shadowPaths = '';
+  let fgPaths = '';
+
+  for (let i = 0; i < cleanedItems.length; i++) {
+    const it = cleanedItems[i];
+    const wWidth = hormoziFont.getAdvanceWidth(it.word, fontSize);
+    const dShadow = hormoziFont.getPath(it.word, curX + 4, baselineY + 4, fontSize).toPathData(1);
+    const dMain = hormoziFont.getPath(it.word, curX, baselineY, fontSize).toPathData(1);
+    const fillColor = it.isHighlighted ? '#FFE600' : '#FFFFFF';
+
+    shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
+    fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="${fillColor}"/>`;
+
+    curX += wWidth + spaceW;
+  }
+
+  return `${shadowPaths}\n${fgPaths}`;
 }
 
 // Fetch a distinct real photograph from Wikipedia / Wikimedia Commons / Real Photo Providers (100% Real Photos Guaranteed!)
@@ -421,24 +489,12 @@ async function renderCaptionedFrame({
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    const plainLineUpper = escapeXml(lineItems.map(x => x.word.toUpperCase()).join(' '));
-    const coloredLineSvg = lineItems.map(x => {
-      const wClean = escapeXml(x.word.toUpperCase());
-      return x.isHighlighted
-        ? `<tspan fill="#FFE600" font-weight="900">${wClean}</tspan>`
-        : `<tspan fill="#FFFFFF" font-weight="900">${wClean}</tspan>`;
-    }).join(' ');
-
-    const estWidth = lineItems.map(x => x.word).join(' ').length * fontSize * 0.67;
-    const lengthGuard = estWidth > 590 ? ` textLength="590" lengthAdjust="spacingAndGlyphs"` : '';
-
-    return `
-      <text x="364" y="${yPos + 4}" text-anchor="middle"${lengthGuard} fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" font-family="Arial Black, Impact, sans-serif" font-size="${fontSize}" font-weight="900">${plainLineUpper}</text>
-      <text x="360" y="${yPos}" text-anchor="middle"${lengthGuard} stroke="#000000" stroke-width="5" paint-order="stroke" font-family="Arial Black, Impact, sans-serif" font-size="${fontSize}" font-weight="900">${coloredLineSvg}</text>
-    `;
+    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 576);
   }).join('\n');
 
-  const safeSceneLabel = String(sceneLabel || 'Imagem Real de Arquivo').slice(0, 38);
+  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').slice(0, 42);
+  const badgeVectorSvg = renderCenteredVectorPath(badgeText || 'FATOS CURIOSOS - LOOP', 360, 109, 21, 340, themeColor);
+  const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 609, 17, 560, '#e0e0ff');
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
@@ -454,16 +510,12 @@ async function renderCaptionedFrame({
     <rect width="100%" height="100%" fill="url(#vignette)"/>
 
     <rect x="170" y="74" width="380" height="54" rx="27" fill="#080812" fill-opacity="0.88" stroke="${themeColor}" stroke-width="3"/>
-    <text x="360" y="109" text-anchor="middle" fill="${themeColor}" font-family="Arial Black, Impact, sans-serif" font-size="23" font-weight="900" letter-spacing="1.5">
-      ${escapeXml(badgeText || '🧠 FATOS CURIOSOS')}
-    </text>
+    ${badgeVectorSvg}
 
     <rect x="38" y="156" width="644" height="484" rx="26" fill="none" stroke="${themeColor}" stroke-width="4" stroke-opacity="0.9"/>
 
     <rect x="56" y="582" width="608" height="42" rx="14" fill="#000000" fill-opacity="0.78"/>
-    <text x="360" y="609" text-anchor="middle" fill="#e0e0ff" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">
-      📸 ${escapeXml(safeSceneLabel)}
-    </text>
+    ${labelVectorSvg}
 
     <g>
       ${subtitleLinesSvg}
