@@ -41,7 +41,55 @@ function renderCenteredVectorPath(rawText, centerX, baselineY, targetFontSize, m
   return `<path d="${d}" fill="${fill}"/>`;
 }
 
-function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610) {
+function getAtmospherePalette(colorTheme = 'cosmic') {
+  const palettes = {
+    danger: {
+      pillFill: '#FF2A54',
+      pillText: '#FFFFFF',
+      accent: '#FF4081',
+      dataColor: '#FFE600',
+      glowColor: '#FF1744'
+    },
+    emerald: {
+      pillFill: '#00E676',
+      pillText: '#05060A',
+      accent: '#00E676',
+      dataColor: '#FFE600',
+      glowColor: '#00C853'
+    },
+    gold: {
+      pillFill: '#FFD700',
+      pillText: '#05060A',
+      accent: '#FFD700',
+      dataColor: '#00E676',
+      glowColor: '#FFB300'
+    },
+    cosmic: {
+      pillFill: '#FFE600',
+      pillText: '#05060A',
+      accent: '#00F0FF',
+      dataColor: '#FFE600',
+      glowColor: '#00E5FF'
+    }
+  };
+  return palettes[colorTheme] || palettes.cosmic;
+}
+
+function getTensionPhaseInfo(sceneIdx = 0, totalScenes = 7) {
+  if (sceneIdx >= totalScenes - 1 && totalScenes >= 2) {
+    return { label: 'CONEXAO INFINITA', dotColor: '#00F0FF', borderColor: '#00F0FF' };
+  }
+  if (sceneIdx >= 4) {
+    return { label: 'FASE 3 • LIMITE EXTREMO', dotColor: '#FF2A54', borderColor: '#FF2A54' };
+  }
+  if (sceneIdx >= 2) {
+    return { label: 'FASE 2 • DADOS REAIS', dotColor: '#FFD700', borderColor: '#FFD700' };
+  }
+  return { label: 'FASE 1 • A DESCOBERTA', dotColor: '#00E676', borderColor: '#00E676' };
+}
+
+function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610, palette = null) {
+  const pal = palette || getAtmospherePalette('cosmic');
   const cleanedItems = lineItems
     .map(item => ({ word: cleanDisplayString(item.word).toUpperCase(), isHighlighted: item.isHighlighted }))
     .filter(item => item.word.length > 0);
@@ -78,7 +126,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
     const dMain = hormoziFont.getPath(it.word, curX, baselineY, fontSize).toPathData(1);
 
     if (it.isHighlighted) {
-      // UPGRADE #3: Submagic / CapCut Pro "Active Word Neon Pill" around the exact word being spoken!
+      // UPGRADE #3: Submagic / CapCut Pro "Active Word Neon Pill" with Dynamic Atmosphere Color Grading!
       const padX = Math.round(fontSize * 0.22);
       const pillH = Math.round(fontSize * 1.24);
       const pillY = Math.round(baselineY - fontSize * 0.94);
@@ -86,8 +134,8 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
       const pillX = Math.round(curX - padX);
 
       pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="14" fill="#000000" fill-opacity="0.85"/>`;
-      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="14" fill="#FFE600" stroke="#000000" stroke-width="4"/>`;
-      fgPaths += `<path d="${dMain}" fill="#05060A" stroke="#05060A" stroke-width="1.5" stroke-linejoin="round"/>`;
+      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="14" fill="${pal.pillFill}" stroke="#000000" stroke-width="4"/>`;
+      fgPaths += `<path d="${dMain}" fill="${pal.pillText}" stroke="${pal.pillText}" stroke-width="1.5" stroke-linejoin="round"/>`;
     } else {
       shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
       fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="#FFFFFF"/>`;
@@ -530,7 +578,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas
+// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas (Studio 3.0 Edition)
 async function renderCaptionedFrame({
   baseCanvasBuffer,
   wordsChunk,
@@ -539,11 +587,17 @@ async function renderCaptionedFrame({
   sceneLabel,
   dataCalloutText = '',
   coverTitleText = '',
+  speakerBadgeText = '',
+  tensionInfo = null,
+  isCommentBaitScene = false,
+  palette = null,
   isFlashCut = false,
   themeColor,
   progressRatio,
   outputFramePath
 }) {
+  const pal = palette || getAtmospherePalette('cosmic');
+  const tInfo = tensionInfo || { label: 'FASE 1 • A DESCOBERTA', dotColor: '#00E676', borderColor: pal.accent };
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
@@ -559,22 +613,43 @@ async function renderCaptionedFrame({
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600);
+    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
   }).join('\n');
 
-  const cleanBadge = cleanDisplayString(badgeText || 'FATOS CURIOSOS').replace(/\s*-\s*LOOP.*$/i, '').trim() || 'FATOS CURIOSOS';
+  // STUDIO 3.0 UPGRADE #4: Top Tension Progression HUD ("FASE 1 • A DESCOBERTA" -> "FASE 3 • LIMITE EXTREMO")
+  const tensionLabelText = cleanDisplayString(tInfo.label || badgeText || 'FATOS CURIOSOS');
   const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').replace(/Loop Infinito/gi, '').slice(0, 44);
-  const badgeVectorSvg = renderCenteredVectorPath(cleanBadge, 360, 99, 22, 340, themeColor);
+  const badgeVectorSvg = renderCenteredVectorPath(tensionLabelText, 372, 98, 20, 355, '#FFFFFF');
   const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 1025, 17, 560, '#e0f4ff');
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
+
+  // STUDIO 3.0 UPGRADE #1: Dueto Podcast Speaker Pill ("VOZ: THALITA" / "VOZ: ANTONIO")
+  let speakerBadgeSvg = '';
+  if (speakerBadgeText) {
+    const spPath = renderCenteredVectorPath(cleanDisplayString(speakerBadgeText), 600, 140, 14, 160, pal.pillFill);
+    speakerBadgeSvg = `
+      <rect x="510" y="118" width="174" height="32" rx="16" fill="#060711" fill-opacity="0.92" stroke="${pal.pillFill}" stroke-width="2"/>
+      ${spPath}
+    `;
+  }
 
   // UPGRADE #2: Glassmorphism Numeric Data Callout Badge ("DADO REAL: 12.262 METROS")
   let dataCalloutSvg = '';
   if (dataCalloutText) {
-    const calloutPath = renderCenteredVectorPath(dataCalloutText, 360, 186, 19, 510, '#FFE600');
+    const calloutPath = renderCenteredVectorPath(dataCalloutText, 360, 188, 19, 510, pal.dataColor);
     dataCalloutSvg = `
-      <rect x="85" y="152" width="550" height="48" rx="14" fill="#070812" fill-opacity="0.88" stroke="#FFE600" stroke-width="2.5"/>
+      <rect x="85" y="154" width="550" height="48" rx="14" fill="#070812" fill-opacity="0.88" stroke="${pal.dataColor}" stroke-width="2.5"/>
       ${calloutPath}
+    `;
+  }
+
+  // STUDIO 3.0 UPGRADE #2: Floating Comment-Bait Engagement Badge on Scene 6 ("COMENTE SUA OPINIAO ABAIXO")
+  let commentBaitSvg = '';
+  if (isCommentBaitScene && !coverTitleText) {
+    const cbPath = renderCenteredVectorPath('COMENTE SUA OPINIAO ABAIXO', 360, 754, 18, 490, '#05060A');
+    commentBaitSvg = `
+      <rect x="110" y="724" width="500" height="42" rx="21" fill="${pal.pillFill}" stroke="#000000" stroke-width="3.5"/>
+      ${cbPath}
     `;
   }
 
@@ -586,10 +661,10 @@ async function renderCaptionedFrame({
     const mid = Math.ceil(words.length / 2);
     const line1 = words.slice(0, mid).join(' ');
     const line2 = words.slice(mid).join(' ');
-    const p1 = renderCenteredVectorPath(line1, 360, 495, 38, 600, '#FFE600', '#000000', 10);
+    const p1 = renderCenteredVectorPath(line1, 360, 495, 38, 600, pal.pillFill, '#000000', 10);
     const p2 = renderCenteredVectorPath(line2, 360, 550, 38, 600, '#FFFFFF', '#000000', 10);
     coverPosterSvg = `
-      <rect x="36" y="430" width="648" height="156" rx="24" fill="#05060d" fill-opacity="0.90" stroke="#FFE600" stroke-width="5"/>
+      <rect x="36" y="430" width="648" height="156" rx="24" fill="#05060d" fill-opacity="0.92" stroke="${pal.pillFill}" stroke-width="5"/>
       ${p1}
       ${p2}
     `;
@@ -601,12 +676,15 @@ async function renderCaptionedFrame({
     : '';
 
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="170" y="64" width="380" height="52" rx="26" fill="#080812" fill-opacity="0.92" stroke="${themeColor}" stroke-width="3"/>
+    <rect x="142" y="64" width="436" height="52" rx="26" fill="#080812" fill-opacity="0.92" stroke="${tInfo.borderColor}" stroke-width="3"/>
+    <circle cx="172" cy="90" r="9" fill="${tInfo.dotColor}"/>
     ${badgeVectorSvg}
+    ${speakerBadgeSvg}
 
     ${dataCalloutSvg}
+    ${commentBaitSvg}
 
-    <rect x="56" y="998" width="608" height="40" rx="14" fill="#05060d" fill-opacity="0.86" stroke="${themeColor}" stroke-width="1.5" stroke-opacity="0.55"/>
+    <rect x="56" y="998" width="608" height="40" rx="14" fill="#05060d" fill-opacity="0.86" stroke="${pal.accent}" stroke-width="1.5" stroke-opacity="0.65"/>
     ${labelVectorSvg}
 
     <g>
@@ -617,7 +695,7 @@ async function renderCaptionedFrame({
     ${flashRectSvg}
 
     <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${themeColor}"/>
+    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
   await sharp(baseCanvasBuffer)
@@ -626,7 +704,7 @@ async function renderCaptionedFrame({
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 2.0 Master Timeline Renderer
+// Single-Pass Studio 3.0 Master Timeline Renderer
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -644,12 +722,17 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const { synthesizeSpeechWithTimings, generateBackgroundMusicWav: genBgm } = require('./tts_and_audio');
 
   const voiceName = options.voice || 'pt-BR-ThalitaMultilingualNeural';
+  const isDuetPodcast = (voiceName === 'duet-podcast');
   const visualStyle = options.visualStyle || 'cinema';
   const scenes = scriptData.scenes || [];
-  const themeColor = scriptData.themeColor || '#00f0ff';
+  const colorTheme = scriptData.colorTheme || 'cosmic';
+  const palette = getAtmospherePalette(colorTheme);
+  const themeColor = palette.accent || scriptData.themeColor || '#00f0ff';
   const badgeText = 'FATOS CURIOSOS';
 
-  onProgress(15, 'Buscando 14 fotos reais do tema + Gravando voz com entonação emocional...');
+  onProgress(15, isDuetPodcast
+    ? 'Studio 3.0: Gravando Dueto Podcast (Thalita + Antônio) + 14 Fotos Reais...'
+    : 'Studio 3.0: Buscando 14 fotos reais + Voz Emocional + Color Grading...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
@@ -659,13 +742,28 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   // 1. Pre-fetch 35-50 real Wikipedia/Wikimedia photos of the exact topic and assign Shot A + Shot B per scene
   const sceneDualQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
 
-  // 2. PARALLEL SCENE PREPARATION: Run Emotional TTS + Download Shot A & Shot B + Build 4 Dynamic Camera Canvases per scene!
+  // 2. PARALLEL SCENE PREPARATION: Run Emotional/Duet TTS + Download Shot A & Shot B + Build 4 Dynamic Camera Canvases per scene!
   const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     const dualQ = sceneDualQueues[i] || sceneDualQueues[0] || { shotAQueue: [], shotBQueue: [] };
 
+    // STUDIO 3.0 UPGRADE #1: Duet Podcast Mode alternates Thalita (Scenes 1,3,5,7) & Antônio (Scenes 2,4,6)
+    // Scene 1 (i=0) and Scene 7 (i=6) BOTH use Thalita so the Infinite Loop Bridge (Cena 7 -> Cena 1) is 100% seamless!
+    let sceneVoice = voiceName;
+    let speakerBadgeText = '';
+    if (isDuetPodcast) {
+      const isLastLoop = (i === scenes.length - 1 && scenes.length >= 2);
+      if (i % 2 === 1 && !isLastLoop) {
+        sceneVoice = 'pt-BR-AntonioNeural';
+        speakerBadgeText = 'VOZ: ANTONIO';
+      } else {
+        sceneVoice = 'pt-BR-ThalitaMultilingualNeural';
+        speakerBadgeText = 'VOZ: THALITA';
+      }
+    }
+
     const [ttsResult, rawPhotoA, rawPhotoB] = await Promise.all([
-      synthesizeSpeechWithTimings(s.narration, audioWavPath, voiceName, i),
+      synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, i),
       downloadAssignedTopicPhoto(dualQ.shotAQueue, i, 'A'),
       downloadAssignedTopicPhoto(dualQ.shotBQueue, i, 'B')
     ]);
@@ -675,18 +773,20 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       sharp(rawPhotoB).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer()
     ]);
 
-    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In)
+    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In) with Atmosphere Color Grading
     const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
-      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, themeColor),
-      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, themeColor),
-      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, themeColor),
-      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, themeColor)
+      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, palette.glowColor),
+      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, palette.glowColor),
+      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, palette.glowColor),
+      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, palette.glowColor)
     ]);
 
     return {
       index: i,
       narration: s.narration,
       sceneLabel: s.sceneLabel || scriptData.title,
+      speakerBadgeText,
+      isCommentBaitScene: Boolean(s.isCommentBaitScene || (i === scenes.length - 2 && scenes.length >= 4)),
       dataCallout: extractDataCalloutFromNarration(s.narration),
       audioWavPath,
       duration: ttsResult.duration,
@@ -716,7 +816,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando legendas Active Word Pill + 14 cortes de câmera Cinema 9:16...');
+  onProgress(68, 'Renderizando HUD de Tensão + Pílula Neon + 14 Cortes Cinema 9:16...');
 
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
@@ -728,6 +828,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     const asset = sceneAssets[i];
     const timedChunks = buildExactTimedChunks(asset.narration, asset.wordBoundaries, asset.duration);
     const isFinalLoopScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
+    const tensionInfo = getTensionPhaseInfo(i, sceneAssets.length);
 
     let sceneElapsed = 0;
     let triggeredMidFlash = false;
@@ -773,6 +874,10 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         sceneLabel: frameLabel,
         dataCalloutText: asset.dataCallout,
         coverTitleText: isCoverFrame ? (scriptData.title || '') : '',
+        speakerBadgeText: asset.speakerBadgeText,
+        tensionInfo: isVisualLoopBridge ? getTensionPhaseInfo(0, sceneAssets.length) : tensionInfo,
+        isCommentBaitScene: asset.isCommentBaitScene,
+        palette,
         isFlashCut,
         themeColor,
         progressRatio,
