@@ -112,11 +112,33 @@ function normalizeMetadata(item) {
     return `${b}${ytSuffix}`;
   };
 
+  const extractBestShockNumber = (fullText) => {
+    const rx = /(\b(?:\d[\d.,]*|cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|mil)(?:\s+e\s+(?:vinte|trinta|quarenta|cinquenta|sessenta|oitenta|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|oitocentos))?\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|troncos|sementes|andares|soldados|vezes|por cento|%))/gi;
+    const matches = Array.from(String(fullText || '').matchAll(rx)).map(m => m[1].trim());
+    if (matches.length === 0) return 'Fatos Reais';
+
+    let best = matches[0];
+    let bestScore = -1;
+    for (const cand of matches) {
+      const low = cand.toLowerCase();
+      let sc = cand.length;
+      if (/bilh/.test(low)) sc += 600;
+      else if (/milh/.test(low)) sc += 500;
+      else if (/\bmil\b|\d{4,}|\d+\.\d{3}/.test(low)) sc += 400;
+      else if (/oitenta|setenta|sessenta|cinquenta|quarenta|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos/.test(low)) sc += 220;
+      if (/toneladas|graus|°c|metros|quilômetros|km|roentgens|atmosferas|cobras|sementes|troncos|andares|raios/.test(low)) sc += 160;
+      if (/^(?:dois|duas|três|quatro|cinco|dez|quinze|vinte|trinta)\s+anos$/i.test(low)) sc -= 120;
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = cand;
+      }
+    }
+    return best;
+  };
+
   const cleanTopicShort = (item.sourceTopic || cleanTitle).replace(/\s*\([^)]*\)/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
   const allSceneText = Array.isArray(item.scenes) ? item.scenes.map(s => s.narration || '').join(' ') : '';
-  const numMatch = allSceneText.match(/(\d[\d.,]*\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km|graus|°c|toneladas|anos|cobras|sementes|andares|raios))/i)
-    || allSceneText.match(/((?:cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|setenta|oitenta|cem|duzentos|trezentos|mil)\s+(?:mil|milhões)?\s*(?:de\s+)?(?:metros|quilômetros|graus|toneladas|anos|cobras|sementes|andares|raios))/i);
-  const numSnippet = numMatch ? numMatch[1].trim() : 'Fatos Reais Impressionantes';
+  const numSnippet = extractBestShockNumber(allSceneText);
 
   const optA = clampTo100(cleanTitle);
   const optB = clampTo100(`O Segredo Real de ${numSnippet} em ${cleanTopicShort}! 😱`);
@@ -451,6 +473,7 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     niche: curated.niche || 'curiosidades',
     durationMode,
     sourceTopic: cleanTopic,
+    wikiSearch: curated.wikiSearch || cleanTopic,
     title: curated.title,
     description,
     hashtags,
