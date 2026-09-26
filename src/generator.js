@@ -235,25 +235,166 @@ const WIKI_CATEGORIES = {
   ]
 };
 
-// Fetch full multi-paragraph text + original image from Wikipedia PT-BR for 65s+ deep scripts
+const { CURATED_DOCUMENTARY_FACTS, HIGH_IMPACT_WIKI_TOPICS } = require('./curated_facts_bank');
+
+// Fetch full multi-section text (up to 12,000 chars!) + original image from Wikipedia PT-BR
 async function fetchFullWikipediaArticle(title) {
   try {
-    const url = `https://pt.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&explaintext=1&exchars=2600&piprop=original|thumbnail&pithumbsize=1080&titles=${encodeURIComponent(title)}&format=json`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+    const url = `https://pt.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&explaintext=1&exchars=12000&piprop=original|thumbnail&pithumbsize=1080&redirects=1&titles=${encodeURIComponent(title)}&format=json`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/5.0' } });
     if (res.ok) {
       const data = await res.json();
       const pages = Object.values(data.query?.pages || {});
       const p = pages[0];
-      if (p && p.extract && p.extract.length > 280) {
+      if (p && p.extract && p.extract.length > 450) {
         return {
           topic: p.title,
-          extract: p.extract.replace(/==+[^=]+=+/g, ' ').replace(/\s+/g, ' ').trim(),
+          extract: p.extract.replace(/==+[^=]+=+/g, '. ').replace(/\s+/g, ' ').trim(),
           wikiImage: p.original?.source || p.thumbnail?.source || null
         };
       }
     }
   } catch (e) {}
   return null;
+}
+
+// Score a sentence by how much REAL concrete information (numbers, dates, causes, records, mechanisms) it contains
+function scoreSentenceFactuality(sentence, cleanTopic) {
+  const s = sentence.trim();
+  if (s.length < 42 || s.length > 250) return -100;
+
+  // Reject dry encyclopedia taxonomy / glossary stubs
+  const dryPatterns = [
+    /é um gênero botânico/i,
+    /é um género botânico/i,
+    /pertencente à família/i,
+    /é uma espécie extinta de anfíbio/i,
+    /pode referir-se a:/i,
+    /é um município brasileiro/i,
+    /classificação científica/i,
+    /ver também/i,
+    /ligações externas/i,
+    /referências bibliográficas/i,
+    /isbn /i
+  ];
+  for (const pat of dryPatterns) {
+    if (pat.test(s)) return -200;
+  }
+
+  let score = 10;
+
+  // Huge bonus for concrete numbers, years, percentages, distances, temperatures, weights
+  const numberMatches = s.match(/\d+/g);
+  if (numberMatches) {
+    score += Math.min(35, numberMatches.length * 14);
+  }
+
+  // Bonus for spoken number/measurement words and real-world impact terms
+  const factKeywords = [
+    'metros', 'quilômetros', 'km', 'graus', 'celsius', 'toneladas', 'quilos',
+    'milhões', 'bilhões', 'mil', 'anos', 'século', 'vezes', 'por cento', '%',
+    'profundidade', 'altura', 'velocidade', 'pressão', 'temperatura', 'veneno',
+    'capaz de', 'único', 'maior', 'menor', 'recorde', 'proibido', 'mortal',
+    'sobrevive', 'descoberto', 'cientistas', 'pesquisadores', 'explosão',
+    'energia', 'cérebro', 'oxigênio', 'oceano', 'planeta', 'terra', 'espaço',
+    'porque', 'causa', 'provoca', 'transforma', 'durante', 'história'
+  ];
+  const lower = s.toLowerCase();
+  for (const kw of factKeywords) {
+    if (lower.includes(kw)) score += 6;
+  }
+
+  return score;
+}
+
+// Extract 6 distinct, information-packed factual sentences in narrative order from a full Wikipedia article
+function extractHighDensityFactualSentences(rawText, cleanTopic) {
+  const cleanedText = String(rawText || '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\s+/g, ' ');
+
+  const rawCandidates = cleanedText
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length >= 42 && s.length <= 245);
+
+  // Score each sentence while preserving its original index for narrative flow
+  const scored = rawCandidates.map((text, idx) => ({
+    text: text.replace(/^[.,;:\-\s]+/, ''),
+    idx,
+    score: scoreSentenceFactuality(text, cleanTopic)
+  })).filter(item => item.score > 0);
+
+  if (scored.length <= 6) {
+    return scored.map(x => x.text);
+  }
+
+  // Always keep the best introductory fact (among first 3 sentences) as Scene 1,
+  // then pick the top 5 highest-scoring factual sentences from the rest of the article, sorted in reading order!
+  const firstPool = scored.slice(0, 3).sort((a, b) => b.score - a.score);
+  const opener = firstPool[0];
+  const remainingPool = scored
+    .filter(x => x.idx !== opener.idx)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .sort((a, b) => a.idx - b.idx);
+
+  return [opener, ...remainingPool].map(x => x.text);
+}
+
+// Build script directly from our Curated Documentary Facts Bank (100% concrete facts, numbers & storytelling)
+async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
+  const cleanTopic = curated.topic;
+  let wikiImage = null;
+  try {
+    const art = await fetchFullWikipediaArticle(curated.wikiSearch || curated.topic);
+    if (art && art.wikiImage) wikiImage = art.wikiImage;
+  } catch (e) {}
+
+  const loopBridge = {
+    endText: curated.loopEnd || 'Mas o detalhe mais impressionante dessa história fica claro quando você descobre que...',
+    startText: curated.loopStart || `...quase ninguém conhece o verdadeiro segredo por trás de ${cleanTopic}!`
+  };
+
+  const builtScenes = curated.scenes.map((sc, idx) => ({
+    narration: idx === 0 ? `${loopBridge.startText} ${sc.narration}` : sc.narration,
+    imageQuery: sc.imageQuery || cleanTopic,
+    fallbackThemeQuery: sc.fallbackThemeQuery || `${cleanTopic} photo`,
+    directImageUrl: idx === 0 ? wikiImage : null,
+    sceneLabel: sc.sceneLabel || `${idx + 1}/7 • ${cleanTopic}`
+  }));
+
+  builtScenes.push({
+    narration: `Se você curte descobrir fatos curiosos reais e cheios de informação como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${loopBridge.endText}`,
+    imageQuery: curated.scenes[0]?.imageQuery || cleanTopic,
+    fallbackThemeQuery: curated.scenes[0]?.fallbackThemeQuery || cleanTopic,
+    sceneLabel: `7/7 • ${cleanTopic}`,
+    isLoopBridgeScene: true
+  });
+
+  const finalScenes = durationMode === 'short'
+    ? [builtScenes[0], builtScenes[1], builtScenes[2], builtScenes[6]]
+    : builtScenes;
+
+  const topicTag = '#' + cleanTopic.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  const description = `${curated.scenes[0].narration}\n\n${curated.scenes[1].narration}\n\nAssista até o final para entender todos os fatos reais sobre ${cleanTopic}! 😱 Você já sabia disso? Comente aqui embaixo! 👇`;
+  const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #documentario #tiktokbrasil #fyp #viral #shorts`;
+
+  return normalizeMetadata({
+    niche: curated.niche || 'curiosidades',
+    durationMode,
+    sourceTopic: cleanTopic,
+    title: curated.title,
+    description,
+    hashtags,
+    caption: `${description}\n\n${hashtags}`,
+    loopBridge,
+    badge: 'FATOS CURIOSOS',
+    musicMood: 'dark',
+    themeColor: '#00f0ff',
+    scenes: finalScenes
+  });
 }
 
 async function fetchUnusedWikipediaFact(niche = 'curiosidades', extraExclude = []) {
@@ -264,164 +405,137 @@ async function fetchUnusedWikipediaFact(niche = 'curiosidades', extraExclude = [
     ...(Array.isArray(extraExclude) ? extraExclude : [])
   ]));
 
-  const catList = [...(WIKI_CATEGORIES[niche] || WIKI_CATEGORIES.curiosidades)].sort(() => Math.random() - 0.5);
-  const alphabet = 'ABCDEFGHIJLMNOPQRSTUVZ';
+  // 1. First try High-Impact Curated Wikipedia Topics Pool (guaranteed rich articles with real facts & numbers)
+  const highImpactPool = [
+    ...(HIGH_IMPACT_WIKI_TOPICS[niche] || []),
+    ...(HIGH_IMPACT_WIKI_TOPICS.curiosidades || [])
+  ].filter(t => !isTopicAlreadyUsed(t, allUsedList));
 
+  if (highImpactPool.length > 0) {
+    const shuffledTopics = highImpactPool.sort(() => Math.random() - 0.5).slice(0, 8);
+    for (const candidateTitle of shuffledTopics) {
+      const fullArt = await fetchFullWikipediaArticle(candidateTitle);
+      if (fullArt && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) {
+        const facts = extractHighDensityFactualSentences(fullArt.extract, fullArt.topic);
+        if (facts.length >= 5) {
+          return fullArt;
+        }
+      }
+    }
+  }
+
+  // 2. Fallback to Wikipedia categories, but ONLY accept long articles with >= 5 real factual/numeric sentences!
+  const catList = [...(WIKI_CATEGORIES[niche] || WIKI_CATEGORIES.curiosidades)].sort(() => Math.random() - 0.5);
   for (let cIdx = 0; cIdx < Math.min(3, catList.length); cIdx++) {
     const randomCat = catList[cIdx];
-    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
     try {
-      // Try both random prefix and full category list so small categories never get stuck on one article
-      const url = cIdx === 0
-        ? `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmstartsortkeyprefix=${randomLetter}&cmlimit=100&format=json`
-        : `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmlimit=150&format=json`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+      const url = `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmlimit=120&format=json`;
+      const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/5.0' } });
       const data = await res.json();
       const members = (data.query?.categorymembers || [])
         .filter(m => m.ns === 0 && !m.title.startsWith('Lista') && !isTopicAlreadyUsed(m.title, allUsedList));
 
       if (members.length > 0) {
-        const shuffled = members.sort(() => Math.random() - 0.5).slice(0, 8);
+        const shuffled = members.sort(() => Math.random() - 0.5).slice(0, 10);
         for (const item of shuffled) {
-          if (isTopicAlreadyUsed(item.title, allUsedList)) continue;
           const fullArt = await fetchFullWikipediaArticle(item.title);
-          if (fullArt && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) {
-            return fullArt;
+          if (fullArt && fullArt.extract.length > 1400 && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) {
+            const facts = extractHighDensityFactualSentences(fullArt.extract, fullArt.topic);
+            if (facts.length >= 5) {
+              return fullArt;
+            }
           }
         }
       }
-    } catch (e) {
-      console.log('Wikipedia category discovery notice:', e.message);
-    }
+    } catch (e) {}
   }
-
-  try {
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const randRes = await fetch('https://pt.wikipedia.org/api/rest_v1/page/random/summary', {
-        headers: { 'User-Agent': 'ShortsFactoryPro/4.0' }
-      });
-      if (randRes.ok) {
-        const randData = await randRes.json();
-        if (randData.title && !isTopicAlreadyUsed(randData.title, allUsedList)) {
-          const fullArt = await fetchFullWikipediaArticle(randData.title);
-          if (fullArt && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) return fullArt;
-        }
-      }
-    }
-  } catch (e) {}
 
   return null;
 }
 
-// Build a 7-Scene Monetizable TikTok/Shorts Script (63s–75s, ~165-185 spoken words) WITH INFINITE LOOP!
+// Build a 7-Scene Monetizable TikTok/Shorts Script (63s–75s) from a full Wikipedia article with ZERO generic filler!
 function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades', durationMode = 'monetized') {
   const cleanTopic = wikiFact.topic.replace(/\s*\([^)]*\)/g, '');
-  const rawSentences = wikiFact.extract
-    .replace(/\([^)]*\)/g, '')
-    .split(/(?<=[.!?])\s+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 25 && s.length < 220);
+  const factualSentences = extractHighDensityFactualSentences(wikiFact.extract, cleanTopic);
 
   const titleTemplates = [
-    `A Verdade Impressionante sobre ${cleanTopic} 😱`,
-    `Quase Ninguém Conhece Esse Segredo de ${cleanTopic} 🧠`,
-    `O Que a Ciência Descobriu Sobre ${cleanTopic} 🔬`,
-    `Por Que ${cleanTopic} Intriga o Mundo Inteiro? 🌍`,
-    `O Fato Mais Curioso da História Sobre ${cleanTopic} ⚡`,
-    `Como ${cleanTopic} Desafia Tudo o Que Sabemos 🤯`
+    `O Fato Real Mais Impressionante Sobre ${cleanTopic} 😱`,
+    `O Que Quase Ninguém Sabe Sobre ${cleanTopic} 🧠`,
+    `Como ${cleanTopic} Realmente Funciona na Prática 🔬`,
+    `Por Que ${cleanTopic} Intriga os Cientistas? 🌍`,
+    `Os Números e Segredos Reais de ${cleanTopic} ⚡`
   ];
   const chosenTitle = titleTemplates[Math.floor(Math.random() * titleTemplates.length)];
 
-  const s1 = rawSentences[0] || `${cleanTopic} é considerado um dos fenômenos mais extraordinários já documentados pela ciência moderna.`;
-  const s2 = rawSentences[1] || `Durante décadas, pesquisadores ao redor do mundo tentaram decifrar como esse processo acontece na prática.`;
-  const s3 = rawSentences[2] || `O que pouca gente imagina é que suas propriedades únicas desafiam completamente a nossa intuição.`;
-  const s4 = rawSentences[3] || `Quando analisado em detalhes, esse fenômeno revela padrões que só existem em condições muito específicas da natureza.`;
-  const s5 = rawSentences[4] || `Além disso, registros históricos mostram que civilizações e cientistas já observavam esses efeitos com grande espanto.`;
-  const s6 = rawSentences[5] || `Hoje, tecnologias avançadas permitiram medir cada detalhe dessa estrutura com precisão milimétrica.`;
+  const f1 = factualSentences[0] || `${cleanTopic} chama a atenção da ciência pelas suas características físicas e históricas únicas.`;
+  const f2 = factualSentences[1] || `Os estudos detalhados sobre ${cleanTopic} revelaram dados específicos sobre como sua estrutura se formou ao longo do tempo.`;
+  const f3 = factualSentences[2] || `Um dos dados mais marcantes registrados pelos pesquisadores mostra como ${cleanTopic} interage diretamente com o ambiente ao seu redor.`;
+  const f4 = factualSentences[3] || `Além disso, medições diretas comprovaram que as proporções e condições de ${cleanTopic} são raras na natureza.`;
+  const f5 = factualSentences[4] || `Na prática, esses registros ajudaram os especialistas a explicar fenômenos que antes pareciam impossíveis de acontecer.`;
+  const f6 = factualSentences[5] || `Por causa dessas descobertas comprovadas, ${cleanTopic} segue sendo um dos casos mais estudados e documentados da área.`;
 
   const topicTag = '#' + cleanTopic.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  const description = `${s1}\n\nAssista até o final para descobrir todos os segredos sobre ${cleanTopic}! 😱 Você já conhecia esse fato curioso? Deixe sua opinião nos comentários! 👇`;
-  const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #misterios #documentario #tiktokbrasil #fyp #viral #shorts`;
+  const description = `${f1}\n\n${f2}\n\nAssista até o final para conhecer os fatos reais sobre ${cleanTopic}! 😱 Você já sabia disso? Comente aqui embaixo! 👇`;
+  const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #documentario #tiktokbrasil #fyp #viral #shorts`;
 
-  // INFINITE LOOP ARCHITECTURE (8 Varied Grammatical Bridges: Final Scene -> Scene 1 at 0:00)
   const loopBridges = [
     {
-      endText: 'Mas o motivo mais chocante de todos é que...',
-      startText: `...quase ninguém no mundo percebe o verdadeiro segredo oculto por trás de ${cleanTopic}!`
+      endText: 'Mas o detalhe mais impressionante dessa história fica claro quando você descobre que...',
+      startText: `...muita gente já ouviu falar em ${cleanTopic}, mas quase ninguém conhece os números e fatos reais por trás disso!`
     },
     {
-      endText: 'Só que o detalhe mais assustador dessa história aparece quando você descobre que...',
-      startText: `...tudo o que aprendemos sobre ${cleanTopic} esconde um fenômeno que desafia a ciência!`
+      endText: 'E tudo isso começa a fazer sentido no exato momento em que você vê que...',
+      startText: `...a verdadeira história científica de ${cleanTopic} guarda fatos reais que surpreendem até os especialistas!`
     },
     {
-      endText: 'Mas a pergunta que deixa até os cientistas sem dormir à noite é por que...',
-      startText: `...${cleanTopic} continua sendo um dos maiores enigmas já registrados no nosso planeta!`
-    },
-    {
-      endText: 'E o mais impressionante de tudo isso fica claro no exato instante em que vemos que...',
-      startText: `...a verdadeira origem de ${cleanTopic} intriga pesquisadores do mundo inteiro há décadas!`
-    },
-    {
-      endText: 'Porém, toda essa descoberta ganha um sentido completamente novo quando você percebe que...',
-      startText: `...por trás de ${cleanTopic} existe um detalhe fascinante que poucos olhos já viram!`
-    },
-    {
-      endText: 'Mas o que torna esse caso realmente único no universo é o fato de que...',
-      startText: `...nenhum outro fenômeno conhecido se comporta exatamente como ${cleanTopic}!`
-    },
-    {
-      endText: 'E se você reparar bem no início de tudo, vai notar imediatamente que...',
-      startText: `...${cleanTopic} guarda uma revelação extraordinária logo à primeira vista!`
-    },
-    {
-      endText: 'Mas a peça final desse quebra-cabeça só se encaixa quando entendemos que...',
-      startText: `...cada detalhe sobre ${cleanTopic} muda completamente a nossa forma de ver o mundo!`
+      endText: 'Só que o dado mais curioso sobre tudo isso aparece logo quando descobrimos que...',
+      startText: `...por trás de ${cleanTopic} existem fatos concretos e comprovados que parecem coisa de filme!`
     }
   ];
   const chosenLoopBridge = loopBridges[Math.floor(Math.random() * loopBridges.length)];
 
   const allScenes = [
     {
-      narration: `${chosenLoopBridge.startText} Olha só que impressionante: ${s1}`,
+      narration: `${chosenLoopBridge.startText} ${f1}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `nature phenomenon discovery`,
+      fallbackThemeQuery: `${cleanTopic} real photo`,
       directImageUrl: wikiFact.wikiImage || null,
-      sceneLabel: `1/7 • ${cleanTopic} (Arquivo Real)`
+      sceneLabel: `1/7 • ${cleanTopic} (Fato Principal)`
     },
     {
-      narration: `E sabe o que deixa essa história ainda mais curiosa? Quando os pesquisadores analisam cada detalhe de perto, ${s2}`,
+      narration: `${f2}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `science research laboratory`,
-      sceneLabel: `2/7 • A Descoberta Científica`
+      fallbackThemeQuery: `${cleanTopic} detail`,
+      sceneLabel: `2/7 • Dados & Origem Real`
     },
     {
-      narration: `Na verdade, existe um ponto específico que chamou a atenção de cientistas no mundo inteiro: ${s3}`,
+      narration: `Além disso, olha só esse dado específico: ${f3}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `microscope macro detail`,
-      sceneLabel: `3/7 • O Detalhe Inexplicável`
+      fallbackThemeQuery: `${cleanTopic} close up`,
+      sceneLabel: `3/7 • Como Funciona na Prática`
     },
     {
-      narration: `E não para por aí, viu? Repara só no que acontece quando esse fenômeno atinge suas condições mais extremas: ${s4}`,
+      narration: `${f4}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `earth geology landscape`,
-      sceneLabel: `4/7 • Condições Extremas`
+      fallbackThemeQuery: `${cleanTopic} nature science`,
+      sceneLabel: `4/7 • Números e Proporções`
     },
     {
-      narration: `Pra você ter uma ideia real de como tudo isso impressiona na prática ao longo do tempo, ${s5}`,
+      narration: `E tem mais um fato importante registrado sobre isso: ${f5}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `historical museum archive`,
-      sceneLabel: `5/7 • Registros na História`
+      fallbackThemeQuery: `${cleanTopic} history archive`,
+      sceneLabel: `5/7 • O Registro Comprovado`
     },
     {
-      narration: `Hoje em dia, graças aos equipamentos modernos de alta precisão, finalmente ficou comprovado que ${s6}`,
+      narration: `${f6}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `astronomy telescope technology`,
-      sceneLabel: `6/7 • Revelação Moderna`
+      fallbackThemeQuery: `${cleanTopic} discovery`,
+      sceneLabel: `6/7 • Conclusão Científica`
     },
     {
-      narration: `Se você adora descobrir fatos curiosos reais como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${chosenLoopBridge.endText}`,
+      narration: `Se você gosta de vídeos direto ao ponto com fatos reais como esse sobre ${cleanTopic}, já segue o perfil para não perder o próximo! ${chosenLoopBridge.endText}`,
       imageQuery: `${cleanTopic}`,
-      fallbackThemeQuery: `planet earth space cosmos`,
+      fallbackThemeQuery: `${cleanTopic} photo`,
       sceneLabel: `7/7 • ${cleanTopic}`,
       isLoopBridgeScene: true
     }
@@ -483,34 +597,71 @@ async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic
     const parsed = typeof customTopic === 'string' ? JSON.parse(customTopic) : customTopic;
     return await deployProjectToGitHub(parsed.token, parsed.repoName || 'shorts-factory-ai');
   }
-  loadHistory(extraExclude);
+
+  const history = loadHistory(extraExclude);
+  const allUsedList = Array.from(new Set([
+    ...(history.usedTopics || []),
+    ...(history.usedTitles || []),
+    ...(Array.isArray(extraExclude) ? extraExclude : [])
+  ]));
 
   const niches = ['curiosidades', 'misterios', 'historia', 'futuro', 'motivacao', 'financas'];
   const targetNiche = (requestedNiche && requestedNiche !== 'auto')
     ? requestedNiche
     : niches[Math.floor(Math.random() * niches.length)];
 
+  // 1. If user did NOT type a customTopic, check our Curated Documentary Facts Bank first!
+  // Every script in CURATED_DOCUMENTARY_FACTS has 6 pure-information scenes with real numbers, dates, causes, and mechanisms.
+  if (!customTopic || !customTopic.trim()) {
+    const matchingCurated = CURATED_DOCUMENTARY_FACTS.filter(item =>
+      (item.niche === targetNiche || targetNiche === 'curiosidades') &&
+      !isTopicAlreadyUsed(item.topic, allUsedList) &&
+      !isTopicAlreadyUsed(item.title, allUsedList)
+    );
+    const anyUnusedCurated = matchingCurated.length > 0
+      ? matchingCurated
+      : CURATED_DOCUMENTARY_FACTS.filter(item =>
+          !isTopicAlreadyUsed(item.topic, allUsedList) &&
+          !isTopicAlreadyUsed(item.title, allUsedList)
+        );
+
+    if (anyUnusedCurated.length > 0) {
+      const chosenCurated = anyUnusedCurated[Math.floor(Math.random() * anyUnusedCurated.length)];
+      const builtCurated = await buildScriptFromCuratedFact(chosenCurated, durationMode);
+      rememberGeneratedScript(builtCurated.title, builtCurated.sourceTopic, extraExclude);
+      return builtCurated;
+    }
+  }
+
+  // 2. Custom Topic or Deep Wikipedia 12,000-char Fact Harvester (with fact-density scoring & zero filler!)
   let wikiFact = null;
   if (!customTopic || !customTopic.trim()) {
     wikiFact = await fetchUnusedWikipediaFact(targetNiche, extraExclude);
   } else {
+    // Also check if customTopic matches a curated documentary script!
+    const matchCurated = CURATED_DOCUMENTARY_FACTS.find(item =>
+      normalizeTopicKey(item.topic).includes(normalizeTopicKey(customTopic)) ||
+      normalizeTopicKey(customTopic).includes(normalizeTopicKey(item.topic))
+    );
+    if (matchCurated) {
+      const builtCurated = await buildScriptFromCuratedFact(matchCurated, durationMode);
+      rememberGeneratedScript(builtCurated.title, builtCurated.sourceTopic, extraExclude);
+      return builtCurated;
+    }
     wikiFact = await fetchFullWikipediaArticle(customTopic.trim());
   }
 
-  // Build 7-scene 62s+ Monetized Script with Infinite Loop directly from verified Wikipedia article + AI
   if (wikiFact) {
     const built = buildMonetizedViralScriptFromWikiFact(wikiFact, targetNiche, durationMode);
     rememberGeneratedScript(built.title, built.sourceTopic, extraExclude);
     return built;
   }
 
-  const fallbackTopic = customTopic || `Fenômeno Científico #${Math.floor(Math.random() * 9000 + 1000)}`;
-  const emergencyScript = buildMonetizedViralScriptFromWikiFact({
-    topic: fallbackTopic,
-    extract: `${fallbackTopic} é um fenômeno extraordinário estudado por cientistas ao redor do globo. Suas propriedades desafiam o senso comum e revelam como a natureza esconde segredos fascinantes. Pesquisas recentes mostraram detalhes inéditos sobre sua estrutura. Quando observado sob condições controladas, apresenta reações únicas na física moderna. Civilizações antigas já tentavam explicar esse mistério olhando para a natureza. Hoje sabemos que esse processo é fundamental para entender a evolução do planeta Terra.`
-  }, targetNiche, durationMode);
-  rememberGeneratedScript(emergencyScript.title, fallbackTopic, extraExclude);
-  return emergencyScript;
+  // Fallback to a random Curated Documentary Fact if Wikipedia search had no match
+  const randomFallbackCurated = CURATED_DOCUMENTARY_FACTS[Math.floor(Math.random() * CURATED_DOCUMENTARY_FACTS.length)];
+  const builtFallback = await buildScriptFromCuratedFact(randomFallbackCurated, durationMode);
+  rememberGeneratedScript(builtFallback.title, builtFallback.sourceTopic, extraExclude);
+  return builtFallback;
 }
 
 module.exports = {
