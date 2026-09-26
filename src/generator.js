@@ -65,14 +65,55 @@ function normalizeMetadata(item) {
     }
   }
 
-  if (!item.hashtags) {
-    if (item.caption && item.caption.includes('#')) {
-      const tags = item.caption.match(/#[\wÀ-ÿ]+/g);
-      item.hashtags = tags ? tags.join(' ') : `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicSlug} #tiktokbrasil #fyp #viral #historia`;
-    } else {
-      item.hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicSlug} #tiktokbrasil #fyp #viral #historia`;
+  // 1. STRICT 5-HASHTAG LIMIT FOR TIKTOK (Algorithm Best Practice)
+  const singleTopicTag = '#' + (item.sourceTopic || cleanTitle)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 22);
+
+  const rawTagMatches = (item.hashtags || item.caption || '').match(/#[\wÀ-ÿ]+/g) || [];
+  const candidateTags = [
+    singleTopicTag.length > 2 ? singleTopicTag : '#misterios',
+    '#fatoscuriosos',
+    '#vocesabia',
+    '#curiosidades',
+    '#ciencia',
+    ...rawTagMatches
+  ];
+  const uniqueFiveTags = [];
+  const seenLower = new Set();
+  for (const t of candidateTags) {
+    const low = t.toLowerCase();
+    if (low.length > 2 && !seenLower.has(low) && low !== '#shorts' && low !== '#tiktokbrasil' && low !== '#fyp') {
+      seenLower.add(low);
+      uniqueFiveTags.push(t);
+    }
+    if (uniqueFiveTags.length === 5) break;
+  }
+  while (uniqueFiveTags.length < 5) {
+    const fillers = ['#fatoscuriosos', '#vocesabia', '#curiosidades', '#ciencia', '#historia'];
+    for (const f of fillers) {
+      if (!uniqueFiveTags.includes(f) && uniqueFiveTags.length < 5) uniqueFiveTags.push(f);
     }
   }
+  item.hashtags = uniqueFiveTags.slice(0, 5).join(' ');
+
+  // 2. STRICT <=100 CHARACTERS TEXT FOR YOUTUBE SHORTS (Title/Caption + #shorts #curiosidades)
+  const ytSuffix = ' #shorts #curiosidades';
+  const maxBaseLen = 98 - ytSuffix.length; // 76 chars max for the hook text
+  let ytBase = cleanTitle.replace(/#[\wÀ-ÿ]+/g, '').trim();
+  if (ytBase.length > maxBaseLen) {
+    ytBase = ytBase.slice(0, maxBaseLen - 1).replace(/\s+\S*$/, '').trim() + '…';
+  }
+  item.youtubeShortText = `${ytBase}${ytSuffix}`;
+
+  // 3. COMPLETE MANUAL TIKTOK CAPTION (Hook + Factual Description + Strictly 5 Hashtags)
+  const cleanDescBody = String(item.description || '').replace(/#[\wÀ-ÿ]+/g, '').trim();
+  item.tiktokPostText = `${cleanTitle}\n\n${cleanDescBody}\n\n${item.hashtags}`;
+  item.caption = item.tiktokPostText;
 
   if (!item.loopBridge) {
     item.loopBridge = {
@@ -91,7 +132,6 @@ function normalizeMetadata(item) {
     }
   } catch (e) {}
 
-  item.caption = `${item.description}\n\n${item.hashtags}`;
   return item;
 }
 
