@@ -98,10 +98,11 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
   let fontSize = targetFontSize;
   const computeTotalWidth = (fSize) => {
-    const spaceW = fSize * 0.34;
+    const spaceW = fSize * 0.36;
     let total = 0;
     cleanedItems.forEach((it, idx) => {
-      total += hormoziFont.getAdvanceWidth(it.word, fSize);
+      const wFont = it.isHighlighted ? Math.round(fSize * 1.15) : fSize;
+      total += hormoziFont.getAdvanceWidth(it.word, wFont);
       if (idx < cleanedItems.length - 1) total += spaceW;
     });
     return total;
@@ -113,7 +114,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
     totalWidth = computeTotalWidth(fontSize);
   }
 
-  const spaceW = fontSize * 0.34;
+  const spaceW = fontSize * 0.36;
   let curX = centerX - (totalWidth / 2);
   let pillRects = '';
   let shadowPaths = '';
@@ -121,20 +122,23 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
   for (let i = 0; i < cleanedItems.length; i++) {
     const it = cleanedItems[i];
-    const wWidth = hormoziFont.getAdvanceWidth(it.word, fontSize);
-    const dShadow = hormoziFont.getPath(it.word, curX + 4, baselineY + 4, fontSize).toPathData(1);
-    const dMain = hormoziFont.getPath(it.word, curX, baselineY, fontSize).toPathData(1);
+    // IMPROVEMENT #3: 15% Elastic Pop-Zoom on the exact active word being spoken!
+    const wordFontSize = it.isHighlighted ? Math.round(fontSize * 1.15) : fontSize;
+    const wWidth = hormoziFont.getAdvanceWidth(it.word, wordFontSize);
+    const activeBaselineY = it.isHighlighted ? Math.round(baselineY + (wordFontSize - fontSize) * 0.25) : baselineY;
+
+    const dShadow = hormoziFont.getPath(it.word, curX + 4, activeBaselineY + 4, wordFontSize).toPathData(1);
+    const dMain = hormoziFont.getPath(it.word, curX, activeBaselineY, wordFontSize).toPathData(1);
 
     if (it.isHighlighted) {
-      // UPGRADE #3: Submagic / CapCut Pro "Active Word Neon Pill" with Dynamic Atmosphere Color Grading!
-      const padX = Math.round(fontSize * 0.22);
-      const pillH = Math.round(fontSize * 1.24);
-      const pillY = Math.round(baselineY - fontSize * 0.94);
+      const padX = Math.round(wordFontSize * 0.22);
+      const pillH = Math.round(wordFontSize * 1.22);
+      const pillY = Math.round(activeBaselineY - wordFontSize * 0.91);
       const pillW = Math.round(wWidth + padX * 2);
       const pillX = Math.round(curX - padX);
 
-      pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="14" fill="#000000" fill-opacity="0.85"/>`;
-      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="14" fill="${pal.pillFill}" stroke="#000000" stroke-width="4"/>`;
+      pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="15" fill="#000000" fill-opacity="0.85"/>`;
+      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="15" fill="${pal.pillFill}" stroke="#000000" stroke-width="4"/>`;
       fgPaths += `<path d="${dMain}" fill="${pal.pillText}" stroke="${pal.pillText}" stroke-width="1.5" stroke-linejoin="round"/>`;
     } else {
       shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -147,21 +151,49 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
   return `${pillRects}\n${shadowPaths}\n${fgPaths}`;
 }
 
-// Extract automatic Numeric Data Callout Badge from spoken narration (e.g., "12.262 METROS", "180 °C", "5 COBRAS / M²")
+// IMPROVEMENT #2: Smart Magnitude Ranker — always selects the biggest/most shocking number in the narration!
 function extractDataCalloutFromNarration(narrationText = '') {
   const txt = String(narrationText || '');
-  const regexes = [
-    /(\d[\d.,]*\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|soldados|engrenagens|páginas|dias|minutos|segundos|por cento|%))/i,
-    /((?:cinco|dez|onze|doze|quinze|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|mil)\s+(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|graus|toneladas|quilos|anos|vezes|por cento|cobras|árvores|raios|soldados|dias|minutos))/i
-  ];
-  for (const rx of regexes) {
-    const m = txt.match(rx);
-    if (m && m[1]) {
-      return `DADO REAL: ${m[1].toUpperCase().slice(0, 28)}`;
+  const rx = /(\b(?:\d[\d.,]*|cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|mil)(?:\s+e\s+(?:vinte|trinta|quarenta|cinquenta|sessenta|oitenta|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|oitocentos))?\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|troncos|sementes|andares|soldados|engrenagens|páginas|dias|minutos|segundos|vezes|por cento|%))/gi;
+  const matches = Array.from(txt.matchAll(rx)).map(m => m[1].trim());
+  if (matches.length === 0) return '';
+
+  let best = matches[0];
+  let bestScore = -1;
+  for (const cand of matches) {
+    const low = cand.toLowerCase();
+    let sc = cand.length;
+    if (/bilh/.test(low)) sc += 600;
+    else if (/milh/.test(low)) sc += 500;
+    else if (/\bmil\b|\d{4,}|\d+\.\d{3}/.test(low)) sc += 400;
+    else if (/oitenta|setenta|sessenta|cinquenta|quarenta|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos/.test(low)) sc += 220;
+    if (/toneladas|graus|°c|metros|quilômetros|km|roentgens|atmosferas|cobras|sementes|troncos|andares|raios/.test(low)) sc += 160;
+    if (/^(?:dois|duas|três|quatro|cinco|dez|quinze|vinte|trinta)\s+anos$/i.test(low)) sc -= 120;
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = cand;
     }
   }
-  return '';
+  return `DADO REAL: ${best.toUpperCase().slice(0, 28)}`;
 }
+
+// Scientific Disambiguation Dictionary for Homonymous Wikipedia Topics (Prevents City/Country Homonym Photos!)
+const SCIENTIFIC_DISAMBIGUATION_MAP = {
+  'pando (árvore)': 'Populus tremuloides Pando tree Fishlake Utah',
+  'pando': 'Populus tremuloides Pando tree Fishlake Utah',
+  'europa (satélite)': 'Europa moon Jupiter NASA',
+  'titã (satélite)': 'Titan moon Saturn Cassini',
+  'quimera (peixe)': 'Chimaera fish deep sea shark',
+  'pata de elefante (chernobyl)': 'Chernobyl nuclear power plant reactor',
+  'matusalém (árvore)': 'Pinus longaeva bristlecone pine White Mountains',
+  'rio fervente': 'Shanay-Timpishka boiling river thermal',
+  'olho do saara': 'Richat Structure Mauritania satellite',
+  'caverna dos cristais': 'Cave of the Crystals Naica selenite',
+  'relâmpago do catatumbo': 'Catatumbo lightning storm Venezuela',
+  'fossa das marianas': 'Mariana Trench Challenger Deep bathyscaphe',
+  'ilha da queimada grande': 'Bothrops insularis Ilha da Queimada Grande',
+  'poço superprofundo de kola': 'Kola Superdeep Borehole Russia'
+};
 
 // Extract clean proper/scientific noun from scene imageQuery without generic English filler words
 function extractCleanEntityName(rawQuery, sourceTopic) {
@@ -174,12 +206,19 @@ function extractCleanEntityName(rawQuery, sourceTopic) {
   return String(sourceTopic || '').replace(/\s*\([^)]*\)/g, '').trim();
 }
 
-// UPGRADE #1 & #5: Pre-fetch 35-50 REAL verified Wikimedia/Wikipedia photographs in 1-2 batch requests
-// and assign TWO distinct photo queues (Shot A + Shot B) per scene (14 real photos per video!)
+// IMPROVEMENT #1: Scientific Disambiguated Batch Photo Fetcher (Zero Homonyms!)
 async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const scenes = scriptData.scenes || [];
-  const rawTopic = String(scriptData.sourceTopic || scriptData.title || 'Ciência').replace(/\s*\([^)]*\)/g, '').trim();
-  let enTitle = '';
+  const fullSourceTopic = String(scriptData.sourceTopic || scriptData.title || 'Ciência').trim();
+  const topicLower = fullSourceTopic.toLowerCase();
+  const disambiguatedTerm = SCIENTIFIC_DISAMBIGUATION_MAP[topicLower]
+    || SCIENTIFIC_DISAMBIGUATION_MAP[topicLower.replace(/\s*\([^)]*\)/g, '').trim()]
+    || scriptData.wikiSearch
+    || '';
+  const rawTopic = disambiguatedTerm || fullSourceTopic.replace(/\s*\([^)]*\)/g, '').trim();
+
+  let enTitleFull = '';
+  let enTitleClean = '';
   let heroUrl = scriptData.scenes?.[0]?.directImageUrl || null;
   const pool = [];
   const seenUrls = new Set();
@@ -187,16 +226,18 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const addCandidate = (url, title = '') => {
     if (!url || seenUrls.has(url)) return;
     if (/\.(svg|gif|tif|tiff|webm|ogv|pdf|djvu)$/i.test(url)) return;
-    if (/icon|logo|symbol|flag|map_of|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola/i.test(url)) return;
+    const checkStr = `${url} ${title}`.toLowerCase();
+    // Block icons, maps, flags, AND municipal/urban homonyms (e.g., Pando city in Uruguay!)
+    if (/icon|logo|symbol|flag|map_of|locator_map|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of/i.test(checkStr)) return;
     seenUrls.add(url);
     pool.push({ url, title: String(title || '').toLowerCase() });
   };
 
   if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
 
-  // 1. Single Call to PT Wikipedia: get English title (langlinks) + main pageimage
+  // 1. Single Call to PT Wikipedia: get exact English Wikipedia article title (preserving "(tree)" / "(moon)" disambiguation!)
   try {
-    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(scriptData.sourceTopic || rawTopic)}&prop=langlinks|pageimages&lllang=en&piprop=original|thumbnail&pithumbsize=1080&redirects=1&format=json`;
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=langlinks|pageimages&lllang=en&piprop=original|thumbnail&pithumbsize=1080&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
       signal: AbortSignal.timeout(4000)
@@ -208,19 +249,41 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         const mainImg = page.original?.source || page.thumbnail?.source;
         if (mainImg) addCandidate(mainImg, `${rawTopic} hero`);
         if (page.langlinks?.[0]?.['*']) {
-          enTitle = page.langlinks[0]['*'].replace(/\s*\([^)]*\)/g, '').trim();
+          enTitleFull = page.langlinks[0]['*'].trim();
+          enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
         }
       }
     }
   } catch (e) {}
 
-  // 2. Single Combined OR Query on Wikimedia Commons (gsrlimit=50)
-  const entitySet = new Set([rawTopic]);
-  if (enTitle) entitySet.add(enTitle);
+  // 1B. Direct Images from the EXACT English Wikipedia Article (100% guaranteed topic match!)
+  const exactArticleTarget = enTitleFull || scriptData.wikiSearch || fullSourceTopic;
+  try {
+    const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&redirects=1&format=json`;
+    const enArtRes = await fetch(enArtImgsUrl, {
+      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+      signal: AbortSignal.timeout(3800)
+    });
+    if (enArtRes.ok) {
+      const enArtData = await enArtRes.json();
+      for (const p of Object.values(enArtData.query?.pages || {})) {
+        const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
+        addCandidate(imgUrl, p.title || exactArticleTarget);
+      }
+    }
+  } catch (e) {}
+
+  // 2. Single Combined Scientific OR Query on Wikimedia Commons (gsrlimit=50)
+  const entitySet = new Set();
+  if (disambiguatedTerm) entitySet.add(disambiguatedTerm);
+  if (enTitleFull && !disambiguatedTerm) entitySet.add(enTitleFull);
   for (const s of scenes) {
     const cleanEnt = extractCleanEntityName(s.imageQuery, rawTopic);
-    if (cleanEnt && cleanEnt.length >= 4) entitySet.add(cleanEnt);
+    if (cleanEnt && cleanEnt.length >= 4 && cleanEnt.toLowerCase() !== 'pando') {
+      entitySet.add(cleanEnt);
+    }
   }
+  if (entitySet.size === 0) entitySet.add(rawTopic);
 
   const uniqueEntities = Array.from(entitySet).slice(0, 4);
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
@@ -243,7 +306,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 
   if (pool.length < 14) {
     try {
-      const broadQuery = `filetype:bitmap ${enTitle || rawTopic}`;
+      const broadQuery = `filetype:bitmap ${disambiguatedTerm || enTitleFull || rawTopic}`;
       const broadUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(broadQuery)}&gsrlimit=35&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
       const bRes = await fetch(broadUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
@@ -932,7 +995,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
 
   const bgMusicWav = path.join(tmpDir, 'bgm.wav');
-  genBgm(bgMusicWav, exactVoiceDur, scriptData.musicMood || 'dark', sceneStartTimes, midCutTimes);
+  genBgm(bgMusicWav, exactVoiceDur, colorTheme || scriptData.musicMood || 'cosmic', sceneStartTimes, midCutTimes);
 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
