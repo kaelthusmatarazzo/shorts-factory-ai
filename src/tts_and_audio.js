@@ -5,20 +5,29 @@ const ffmpegPath = require('ffmpeg-static');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
 // Synthesize speech in PT-BR and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
-async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-ThalitaMultilingualNeural') {
+async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-ThalitaMultilingualNeural', sceneIndex = 0) {
   const rawMp3Path = outputWavPath.replace(/\.wav$/, '_raw.mp3');
   const wordBoundaries = [];
   let generated = false;
 
-  // Natural human conversational prosody tuning per voice so it never sounds robotic or stiff
-  const prosodyByVoice = {
-    'pt-BR-ThalitaMultilingualNeural': { rate: '+5%', pitch: '-1Hz' },
-    'en-US-AvaMultilingualNeural': { rate: '+4%', pitch: '+0Hz' },
-    'en-US-EmmaMultilingualNeural': { rate: '+5%', pitch: '+0Hz' },
-    'pt-BR-FranciscaNeural': { rate: '+6%', pitch: '-2Hz' },
-    'pt-BR-AntonioNeural': { rate: '+5%', pitch: '-1Hz' }
+  // Dynamic Scene-Aware Documentary Prosody (Hook is faster/punchier; Climax scenes have deeper weight; Loop Bridge builds momentum)
+  const baseProsodyByVoice = {
+    'pt-BR-ThalitaMultilingualNeural': [
+      { rate: '+11%', pitch: '+1Hz' }, // Scene 1: High-retention scroll-stopping Hook
+      { rate: '+7%', pitch: '-1Hz' },  // Scene 2: Engaging Setup
+      { rate: '+7%', pitch: '-1Hz' },  // Scene 3: Deep Mechanism
+      { rate: '+5%', pitch: '-2Hz' },  // Scene 4: Dramatic Reveal / Extreme Numbers
+      { rate: '+6%', pitch: '-1Hz' },  // Scene 5: Historical Proof
+      { rate: '+8%', pitch: '+0Hz' },  // Scene 6: Scientific Payoff
+      { rate: '+10%', pitch: '+1Hz' }  // Scene 7: Cliffhanger Loop Bridge -> 0:00
+    ],
+    'en-US-AvaMultilingualNeural': [{ rate: '+7%', pitch: '+0Hz' }],
+    'en-US-EmmaMultilingualNeural': [{ rate: '+8%', pitch: '+0Hz' }],
+    'pt-BR-FranciscaNeural': [{ rate: '+8%', pitch: '-2Hz' }],
+    'pt-BR-AntonioNeural': [{ rate: '+7%', pitch: '-1Hz' }]
   };
-  const prosodyOptions = prosodyByVoice[voiceName] || { rate: '+5%', pitch: '-1Hz' };
+  const voiceCurve = baseProsodyByVoice[voiceName] || baseProsodyByVoice['pt-BR-ThalitaMultilingualNeural'];
+  const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+7%', pitch: '-1Hz' };
 
   try {
     const tts = new MsEdgeTTS();
@@ -218,7 +227,7 @@ function injectMysteryPingSFX(left, right, pingSample, sampleRate, freq = 1108.7
   }
 }
 
-function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', sceneStartTimes = []) {
+function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', sceneStartTimes = [], midCutTimes = []) {
   const sampleRate = 44100;
   const totalSamples = Math.floor((durationSec + 0.5) * sampleRate);
   const left = new Float32Array(totalSamples);
@@ -246,7 +255,7 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
 
     const beatPos = (t % (beatDur * 2)) / (beatDur * 2);
     const subEnv = Math.exp(-beatPos * 4.5);
-    const sub = Math.tanh(Math.sin(2 * Math.PI * subFreq * t) * 2.0) * subEnv * 0.32;
+    const sub = Math.tanh(Math.sin(2 * Math.PI * subFreq * t) * 2.0) * subEnv * 0.34;
 
     const arpIdx = Math.floor(t / (beatDur / 2)) % freqs.length;
     const arpPos = (t % (beatDur / 2)) / (beatDur / 2);
@@ -254,14 +263,16 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
     const arp = Math.sin(2 * Math.PI * (freqs[arpIdx] * 2) * t) * arpEnv * 0.10;
 
     let masterEnv = 1.0;
-    if (t < 0.3) masterEnv = t / 0.3;
-    if (t > durationSec - 0.8) masterEnv = Math.max(0, (durationSec - t) / 0.8);
+    if (t < 0.25) masterEnv = t / 0.25;
+    if (t > durationSec - 0.5) masterEnv = Math.max(0, (durationSec - t) / 0.5);
 
     left[i] = (pad * (0.7 + 0.3 * lfo) + sub + arp * 0.8) * masterEnv;
     right[i] = (pad * (1.0 - 0.3 * lfo) + sub + arp * 1.2) * masterEnv;
   }
 
-  injectBassBoomSFX(left, right, Math.floor(0.02 * sampleRate), sampleRate, 0.95);
+  // 0:00 Scroll-Stopping Hook Sub-Bass Impact + Shutter
+  injectWhooshAndShutterSFX(left, right, Math.floor(0.05 * sampleRate), sampleRate);
+  injectBassBoomSFX(left, right, Math.floor(0.02 * sampleRate), sampleRate, 1.05);
 
   for (let idx = 0; idx < sceneStartTimes.length; idx++) {
     const startSec = sceneStartTimes[idx];
@@ -271,9 +282,18 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
       injectWhooshAndShutterSFX(left, right, samplePos, sampleRate);
     }
 
-    const pingSample = Math.floor((startSec + 2.2) * sampleRate);
+    const pingSample = Math.floor((startSec + 1.8) * sampleRate);
     if (pingSample < totalSamples - sampleRate) {
       injectMysteryPingSFX(left, right, pingSample, sampleRate, freqs[idx % freqs.length] * 4);
+    }
+  }
+
+  // Mid-Scene 3.5s Visual Cut SFX (Sub-Cut A -> Sub-Cut B whoosh + subtle low punch)
+  for (const midSec of midCutTimes) {
+    const midSample = Math.floor(midSec * sampleRate);
+    if (midSample > sampleRate && midSample < totalSamples - sampleRate) {
+      injectBassBoomSFX(left, right, midSample, sampleRate, 0.38);
+      injectMysteryPingSFX(left, right, midSample, sampleRate, freqs[2] * 3);
     }
   }
 
