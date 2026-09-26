@@ -274,12 +274,48 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
   injectWhooshAndShutterSFX(left, right, Math.floor(0.05 * sampleRate), sampleRate);
   injectBassBoomSFX(left, right, Math.floor(0.02 * sampleRate), sampleRate, 1.05);
 
+  // Helper: Double Heartbeat ("LUB-DUB" 55Hz/68Hz) + Submarine Sonar Ping (1320Hz) for Scene 3 (~20s) & Scene 5 (~42s) Re-Hooks
+  const injectHeartbeatSonarRehookSFX = (startPos) => {
+    const pulses = [
+      { offsetSec: 0.00, freq: 55, dur: 0.16, gain: 0.55 },
+      { offsetSec: 0.22, freq: 68, dur: 0.14, gain: 0.45 },
+      { offsetSec: 0.85, freq: 55, dur: 0.16, gain: 0.50 },
+      { offsetSec: 1.07, freq: 68, dur: 0.14, gain: 0.40 }
+    ];
+    for (const p of pulses) {
+      const pStart = startPos + Math.floor(p.offsetSec * sampleRate);
+      const pLen = Math.floor(p.dur * sampleRate);
+      for (let k = 0; k < pLen && (pStart + k) < totalSamples; k++) {
+        const tau = k / sampleRate;
+        const env = Math.sin(Math.PI * (k / pLen)) * Math.exp(-tau * 12);
+        const thump = Math.sin(2 * Math.PI * p.freq * tau) * p.gain * env;
+        left[pStart + k] += thump;
+        right[pStart + k] += thump;
+      }
+    }
+    // Submarine Sonar Alert Ping (1320Hz crystal resonance)
+    const sonarStart = startPos + Math.floor(0.10 * sampleRate);
+    const sonarLen = Math.floor(0.55 * sampleRate);
+    for (let k = 0; k < sonarLen && (sonarStart + k) < totalSamples; k++) {
+      const tau = k / sampleRate;
+      const env = Math.exp(-tau * 6.5);
+      const ping = Math.sin(2 * Math.PI * 1320 * tau) * 0.18 * env;
+      left[sonarStart + k] += ping * 0.9;
+      right[sonarStart + k] += ping * 1.1;
+    }
+  };
+
   for (let idx = 0; idx < sceneStartTimes.length; idx++) {
     const startSec = sceneStartTimes[idx];
     const samplePos = Math.floor(startSec * sampleRate);
 
     if (idx > 0) {
       injectWhooshAndShutterSFX(left, right, samplePos, sampleRate);
+    }
+
+    // UPGRADE #4: Anti-Drop Re-Hook Heartbeat + Sonar at Scene 3 (idx===2, ~20s) and Scene 5 (idx===4, ~42s)
+    if (idx === 2 || idx === 4) {
+      injectHeartbeatSonarRehookSFX(samplePos);
     }
 
     const pingSample = Math.floor((startSec + 1.8) * sampleRate);
