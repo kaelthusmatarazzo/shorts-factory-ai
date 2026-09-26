@@ -101,14 +101,29 @@ function normalizeMetadata(item) {
   }
   item.hashtags = uniqueFiveTags.slice(0, 5).join(' ');
 
-  // 2. STRICT <=100 CHARACTERS TEXT FOR YOUTUBE SHORTS (Title/Caption + #shorts #curiosidades)
+  // 2. STRICT <=100 CHARACTERS TEXT + 3 A/B VARIATIONS FOR YOUTUBE SHORTS & TIKTOK
   const ytSuffix = ' #shorts #curiosidades';
   const maxBaseLen = 98 - ytSuffix.length; // 76 chars max for the hook text
-  let ytBase = cleanTitle.replace(/#[\wÀ-ÿ]+/g, '').trim();
-  if (ytBase.length > maxBaseLen) {
-    ytBase = ytBase.slice(0, maxBaseLen - 1).replace(/\s+\S*$/, '').trim() + '…';
-  }
-  item.youtubeShortText = `${ytBase}${ytSuffix}`;
+  const clampTo100 = (rawStr) => {
+    let b = String(rawStr || '').replace(/#[\wÀ-ÿ]+/g, '').replace(/\s+/g, ' ').trim();
+    if (b.length > maxBaseLen) {
+      b = b.slice(0, maxBaseLen - 1).replace(/\s+\S*$/, '').trim() + '…';
+    }
+    return `${b}${ytSuffix}`;
+  };
+
+  const cleanTopicShort = (item.sourceTopic || cleanTitle).replace(/\s*\([^)]*\)/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+  const allSceneText = Array.isArray(item.scenes) ? item.scenes.map(s => s.narration || '').join(' ') : '';
+  const numMatch = allSceneText.match(/(\d[\d.,]*\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km|graus|°c|toneladas|anos|cobras|sementes|andares|raios))/i)
+    || allSceneText.match(/((?:cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|setenta|oitenta|cem|duzentos|trezentos|mil)\s+(?:mil|milhões)?\s*(?:de\s+)?(?:metros|quilômetros|graus|toneladas|anos|cobras|sementes|andares|raios))/i);
+  const numSnippet = numMatch ? numMatch[1].trim() : 'Fatos Reais Impressionantes';
+
+  const optA = clampTo100(cleanTitle);
+  const optB = clampTo100(`O Segredo Real de ${numSnippet} em ${cleanTopicShort}! 😱`);
+  const optC = clampTo100(`Você Teria Coragem de Ver ${cleanTopicShort} de Perto? ⚠️`);
+
+  item.youtubeShortText = optA;
+  item.shortOptions100 = [optA, optB, optC];
 
   // 3. COMPLETE MANUAL TIKTOK CAPTION (Hook + Factual Description + Strictly 5 Hashtags)
   const cleanDescBody = String(item.description || '').replace(/#[\wÀ-ÿ]+/g, '').trim();
