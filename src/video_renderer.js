@@ -492,8 +492,9 @@ async function renderCaptionedFrame({
     return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 576);
   }).join('\n');
 
-  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').slice(0, 42);
-  const badgeVectorSvg = renderCenteredVectorPath(badgeText || 'FATOS CURIOSOS - LOOP', 360, 109, 21, 340, themeColor);
+  const cleanBadge = cleanDisplayString(badgeText || 'FATOS CURIOSOS').replace(/\s*-\s*LOOP.*$/i, '').trim() || 'FATOS CURIOSOS';
+  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').replace(/Loop Infinito/gi, '').slice(0, 42);
+  const badgeVectorSvg = renderCenteredVectorPath(cleanBadge, 360, 109, 22, 340, themeColor);
   const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 609, 17, 560, '#e0e0ff');
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
@@ -554,7 +555,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const voiceName = options.voice || 'pt-BR-ThalitaMultilingualNeural';
   const scenes = scriptData.scenes || [];
   const themeColor = scriptData.themeColor || '#00f0ff';
-  const badgeText = scriptData.badge || '🧠 FATOS CURIOSOS';
+  const badgeText = 'FATOS CURIOSOS';
 
   onProgress(15, 'Gravando voz neural com timestamps exatos por palavra (WordBoundary)...');
 
@@ -665,7 +666,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(65, 'Renderizando quadros em paralelo com sincronização WordBoundary + Loop 🔁...');
+  onProgress(65, 'Renderizando quadros em paralelo com sincronização WordBoundary...');
 
   // Build ONE Single Master Frame Timeline across all scenes (ZERO scene concat drift!)
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
@@ -689,7 +690,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       const framePhotoBuf = isVisualLoopBridge ? sceneAssets[0].rawPhotoBuffer : asset.rawPhotoBuffer;
       const frameBackdropBuf = isVisualLoopBridge ? sceneAssets[0].blurredBackdropBuffer : asset.blurredBackdropBuffer;
       const frameLabel = isVisualLoopBridge
-        ? '🔁 Conectando ao Início (Loop Infinito)'
+        ? sceneAssets[0].sceneLabel
         : asset.sceneLabel;
       const zoomFactor = isVisualLoopBridge
         ? 1.01
