@@ -81,6 +81,16 @@ function normalizeMetadata(item) {
     };
   }
 
+  try {
+    const { detectTopicColorTheme, generatePinnedCommentForTopic } = require('./curated_facts_bank');
+    if (!item.colorTheme) {
+      item.colorTheme = detectTopicColorTheme(item.sourceTopic || cleanTitle, item.niche || 'curiosidades', cleanTitle);
+    }
+    if (!item.pinnedComment) {
+      item.pinnedComment = generatePinnedCommentForTopic(item.sourceTopic || cleanTitle, cleanTitle);
+    }
+  } catch (e) {}
+
   item.caption = `${item.description}\n\n${item.hashtags}`;
   return item;
 }
@@ -362,7 +372,8 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     imageQuery: sc.imageQuery || cleanTopic,
     fallbackThemeQuery: sc.fallbackThemeQuery || `${cleanTopic} photo`,
     directImageUrl: idx === 0 ? wikiImage : null,
-    sceneLabel: sc.sceneLabel || `${idx + 1}/7 • ${cleanTopic}`
+    sceneLabel: sc.sceneLabel || `${idx + 1}/7 • ${cleanTopic}`,
+    isCommentBaitScene: idx === curated.scenes.length - 1
   }));
 
   builtScenes.push({
@@ -392,6 +403,8 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     loopBridge,
     badge: 'FATOS CURIOSOS',
     musicMood: 'dark',
+    colorTheme: curated.colorTheme || undefined,
+    pinnedComment: curated.pinnedComment || undefined,
     themeColor: '#00f0ff',
     scenes: finalScenes
   });
@@ -527,10 +540,11 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `5/7 • O Registro Comprovado`
     },
     {
-      narration: `${f6}`,
+      narration: `${f6.replace(/\.*$/, '')}. E você, já conhecia esse fato sobre ${cleanTopic}? Comente sua opinião!`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} discovery`,
-      sceneLabel: `6/7 • Conclusão Científica`
+      sceneLabel: `6/7 • Conclusão Científica`,
+      isCommentBaitScene: true
     },
     {
       narration: `Se você gosta de vídeos direto ao ponto com fatos reais como esse sobre ${cleanTopic}, já segue o perfil para não perder o próximo! ${chosenLoopBridge.endText}`,
