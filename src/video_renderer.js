@@ -644,7 +644,6 @@ async function renderCaptionedFrame({
   outputFramePath
 }) {
   const pal = palette || getAtmospherePalette('cosmic');
-  const tInfo = tensionInfo || { label: 'FASE 1 • A DESCOBERTA', dotColor: '#00E676', borderColor: pal.accent };
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
@@ -663,95 +662,19 @@ async function renderCaptionedFrame({
     return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
   }).join('\n');
 
-  // STUDIO 3.0 UPGRADE #4: Top Tension Progression HUD ("FASE 1 • A DESCOBERTA" -> "FASE 3 • LIMITE EXTREMO")
-  const tensionLabelText = cleanDisplayString(tInfo.label || badgeText || 'FATOS CURIOSOS');
-  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').replace(/Loop Infinito/gi, '').slice(0, 44);
-  const badgeVectorSvg = renderCenteredVectorPath(tensionLabelText, 372, 98, 20, 355, '#FFFFFF');
-  const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 1025, 17, 560, '#e0f4ff');
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
-
-  // STUDIO 3.0 UPGRADE #1: Dueto Podcast Speaker Pill ("VOZ: THALITA" / "VOZ: ANTONIO")
-  let speakerBadgeSvg = '';
-  if (speakerBadgeText) {
-    const spPath = renderCenteredVectorPath(cleanDisplayString(speakerBadgeText), 600, 140, 14, 160, pal.pillFill);
-    speakerBadgeSvg = `
-      <rect x="510" y="118" width="174" height="32" rx="16" fill="#060711" fill-opacity="0.92" stroke="${pal.pillFill}" stroke-width="2"/>
-      ${spPath}
-    `;
-  }
-
-  // UPGRADE #2: Glassmorphism Numeric Data Callout Badge ("DADO REAL: 12.262 METROS")
-  let dataCalloutSvg = '';
-  if (dataCalloutText) {
-    const calloutPath = renderCenteredVectorPath(dataCalloutText, 360, 188, 19, 510, pal.dataColor);
-    dataCalloutSvg = `
-      <rect x="85" y="154" width="550" height="48" rx="14" fill="#070812" fill-opacity="0.88" stroke="${pal.dataColor}" stroke-width="2.5"/>
-      ${calloutPath}
-    `;
-  }
-
-  // STUDIO 4.0 ITEM #4: Anti-Boredom Visual Re-Hook Alert Banner at ~20s (Scene 3) & ~42s (Scene 5)
-  let rehookBannerSvg = '';
-  if (rehookAlertText && !coverTitleText) {
-    const rhPath = renderCenteredVectorPath(cleanDisplayString(rehookAlertText), 360, 246, 19, 520, '#FFFFFF');
-    rehookBannerSvg = `
-      <rect x="85" y="212" width="550" height="48" rx="24" fill="#FF1744" fill-opacity="0.94" stroke="#FFE600" stroke-width="3"/>
-      ${rhPath}
-    `;
-  }
-
-  // STUDIO 3.0 UPGRADE #2: Floating Comment-Bait Engagement Badge on Scene 6 ("COMENTE SUA OPINIAO ABAIXO")
-  let commentBaitSvg = '';
-  if (isCommentBaitScene && !coverTitleText) {
-    const cbPath = renderCenteredVectorPath('COMENTE SUA OPINIAO ABAIXO', 360, 754, 18, 490, '#05060A');
-    commentBaitSvg = `
-      <rect x="110" y="724" width="500" height="42" rx="21" fill="${pal.pillFill}" stroke="#000000" stroke-width="3.5"/>
-      ${cbPath}
-    `;
-  }
-
-  // UPGRADE #7: Frame-0 Viral Cover Poster Banner (for TikTok / YouTube Shorts Grid Thumbnail!)
-  let coverPosterSvg = '';
-  if (coverTitleText) {
-    const cleanCover = cleanDisplayString(coverTitleText).toUpperCase();
-    const words = cleanCover.split(/\s+/);
-    const mid = Math.ceil(words.length / 2);
-    const line1 = words.slice(0, mid).join(' ');
-    const line2 = words.slice(mid).join(' ');
-    const p1 = renderCenteredVectorPath(line1, 360, 495, 38, 600, pal.pillFill, '#000000', 10);
-    const p2 = renderCenteredVectorPath(line2, 360, 550, 38, 600, '#FFFFFF', '#000000', 10);
-    coverPosterSvg = `
-      <rect x="36" y="430" width="648" height="156" rx="24" fill="#05060d" fill-opacity="0.92" stroke="${pal.pillFill}" stroke-width="5"/>
-      ${p1}
-      ${p2}
-    `;
-  }
 
   // Subtle 60ms Cinema Cut Flash on photo transitions
   const flashRectSvg = isFlashCut
     ? `<rect width="100%" height="100%" fill="#ffffff" fill-opacity="0.14"/>`
     : '';
 
+  // CLEAN SCREEN: ONLY Karaoke Subtitles (subtitleLinesSvg) — zero extra text badges or banners!
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="142" y="64" width="436" height="52" rx="26" fill="#080812" fill-opacity="0.92" stroke="${tInfo.borderColor}" stroke-width="3"/>
-    <circle cx="172" cy="90" r="9" fill="${tInfo.dotColor}"/>
-    ${badgeVectorSvg}
-    ${speakerBadgeSvg}
-
-    ${dataCalloutSvg}
-    ${rehookBannerSvg}
-    ${commentBaitSvg}
-
-    <rect x="56" y="998" width="608" height="40" rx="14" fill="#05060d" fill-opacity="0.86" stroke="${pal.accent}" stroke-width="1.5" stroke-opacity="0.65"/>
-    ${labelVectorSvg}
-
     <g>
       ${subtitleLinesSvg}
     </g>
-
-    ${coverPosterSvg}
     ${flashRectSvg}
-
     <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
     <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
