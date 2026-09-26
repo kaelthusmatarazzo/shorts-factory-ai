@@ -303,17 +303,17 @@
         </div>
 
         <div class="field" style="margin-bottom:10px;">
-          <label style="color:#00f0ff;">📌 Título Viral (Editável)</label>
-          <input id="editScriptTitle" type="text" style="width:100%; background:#0b0c14; color:#fff; border:1px solid rgba(0,240,255,0.4); border-radius:10px; padding:10px; font-size:0.9rem; font-weight:700;" />
+          <label style="color:#ff6b81;">🔴 Texto YouTube Shorts (Máximo 100 Letras com #shorts)</label>
+          <input id="editScriptTitle" type="text" maxlength="100" style="width:100%; background:#0b0c14; color:#fff; border:1px solid rgba(255,107,129,0.45); border-radius:10px; padding:10px; font-size:0.9rem; font-weight:700;" />
         </div>
 
         <div class="field" style="margin-bottom:10px;">
-          <label style="color:#00f0ff;">📝 Descrição SEO (Editável)</label>
+          <label style="color:#00f0ff;">🎵 Descrição para o TikTok (Editável)</label>
           <textarea id="editScriptDesc" rows="3" style="width:100%; background:#0b0c14; color:#e0e0f5; border:1px solid var(--border); border-radius:10px; padding:10px; font-size:0.8rem; font-family:inherit;"></textarea>
         </div>
 
         <div class="field" style="margin-bottom:10px;">
-          <label style="color:#00f0ff;">🏷️ Hashtags (Editáveis)</label>
+          <label style="color:#00e676;">🏷️ 5 Hashtags do TikTok (Exatamente 5 Tags)</label>
           <input id="editScriptTags" type="text" style="width:100%; background:#0b0c14; color:var(--primary); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:0.78rem; font-weight:700;" />
         </div>
 
@@ -384,16 +384,16 @@
           <span id="statusText">Iniciando fábrica...</span>
           <span id="statusPercent">10%</span>
         </div>
-        <div class="progress-track">
+        <div class="progress-bar">
           <div id="progressFill" class="progress-fill"></div>
         </div>
       </div>
     </div>
 
-    <!-- VIDEO PREVIEW & MOBILE SHARE/DOWNLOAD CARD -->
+    <!-- VIDEO PREVIEW & MANUAL POSTING KIT CARD (TIKTOK 5 HASHTAGS + YOUTUBE SHORTS <=100 CHARS) -->
     <div id="resultCard" class="card result-card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:0.78rem; color:var(--success); font-weight:800;">✅ VÍDEO PRONTO • 🔁 LOOP INFINITO ATIVO</span>
+        <span style="font-size:0.78rem; color:var(--success); font-weight:800;">✅ VÍDEO PRONTO PARA POSTAGEM MANUAL</span>
         <span id="videoDurationBadge" style="font-size:0.75rem; color:var(--muted);">9:16 HD</span>
       </div>
 
@@ -401,165 +401,57 @@
         <video id="shortPlayer" controls loop playsinline></video>
       </div>
 
-      <div class="action-row">
-        <button id="btnAutoPublishBoth" class="btn-secondary btn-share" style="background:linear-gradient(135deg, #ff0055, #7000ff); border:none;" onclick="autoPublish('both')">
-          🚀 POSTAR AUTOMÁTICO (YOUTUBE + TIKTOK)
-        </button>
-        <button id="btnAutoPublishYT" class="btn-secondary" style="border-color:#ff3d57; color:#ff6b81; font-weight:800;" onclick="autoPublish('youtube')">
-          🔴 Auto-Post YouTube
-        </button>
-        <button id="btnAutoPublishTK" class="btn-secondary" style="border-color:#00f0ff; color:#00f0ff; font-weight:800;" onclick="autoPublish('tiktok')">
-          🎵 Auto-Post TikTok
-        </button>
-        <button class="btn-secondary btn-share" style="background:linear-gradient(135deg, #00c853, #009624);" onclick="shareToPhone()">
-          📲 Abrir App TikTok / YT (Com Kit Já Copiado!)
-        </button>
-        <a id="downloadLink" class="btn-secondary" href="#" download>
-          ⬇️ Baixar .MP4
+      <!-- BOTÕES DE DOWNLOAD E ENVIO DIRETO PRO CELULAR -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px;">
+        <a id="downloadLink" class="hero-btn" style="padding:14px; font-size:0.88rem; text-decoration:none; background:linear-gradient(135deg, #00c853, #009624);" href="#" download>
+          ⬇️ BAIXAR VÍDEO .MP4
         </a>
-        <button class="btn-secondary" style="border-color:var(--primary); color:var(--primary);" onclick="copyCaption()">
-          ⚡ Copiar Kit Completo
+        <button class="hero-btn" style="padding:14px; font-size:0.88rem; background:linear-gradient(135deg, #00b4db, #0083b0);" onclick="shareToPhone()">
+          📲 COMPARTILHAR NO APP
         </button>
       </div>
 
-      <div id="publishStatusBanner" style="display:none; padding:12px; border-radius:12px; font-size:0.82rem; font-weight:700; line-height:1.45; background:rgba(0,240,255,0.1); border:1px solid var(--primary);"></div>
-
-      <!-- CONEXÃO DO LOOP INFINITO (FINAL -> INÍCIO 0:00) -->
-      <div class="meta-box" style="border-color:rgba(0,230,118,0.45); background:rgba(0,230,118,0.06);">
-        <strong style="color:#00e676; margin-bottom:6px;">🔁 CONEXÃO DO LOOP INFINITO (FINAL ➔ INÍCIO 0:00)</strong>
-        <div id="videoLoopBridgeDisplay" style="font-size:0.8rem; color:#e0ffe8; line-height:1.45;"></div>
-      </div>
-
-      <!-- 1. TÍTULO VIRAL -->
-      <div class="meta-box">
+      <!-- 1. KIT TIKTOK (DESCRIÇÃO COMPLETA + EXATAMENTE 5 HASHTAGS) -->
+      <div class="meta-box" style="border-color:rgba(0,240,255,0.5); background:rgba(0,240,255,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <strong style="margin:0;">📌 TÍTULO (YOUTUBE / TIKTOK)</strong>
-          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('title')">📋 Copiar Título</button>
+          <div>
+            <strong style="margin:0; color:#00f0ff;">🎵 1. DESCRIÇÃO TIKTOK (COM 5 HASHTAGS)</strong>
+            <span id="tiktokTagsBadge" style="display:inline-block; margin-left:6px; font-size:0.68rem; background:#00e676; color:#000; font-weight:900; padding:2px 7px; border-radius:99px;">5/5 HASHTAGS ✅</span>
+          </div>
+          <button class="btn-secondary" style="padding:6px 12px; font-size:0.75rem; border-color:#00f0ff; color:#00f0ff; font-weight:800;" onclick="copyField('tiktokPostText')">📋 Copiar p/ TikTok</button>
         </div>
-        <p id="videoTitleDisplay" style="color:#fff; font-weight:700; font-size:0.95rem;"></p>
+        <p id="videoTikTokDisplay" style="color:#e8faff; font-size:0.83rem; white-space:pre-line; line-height:1.45;"></p>
+        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed rgba(0,240,255,0.25); display:flex; justify-content:space-between; align-items:center;">
+          <span id="videoTagsDisplay" style="color:var(--primary); font-size:0.78rem; font-weight:800;"></span>
+          <button class="btn-secondary" style="padding:3px 8px; font-size:0.68rem;" onclick="copyField('hashtags')">📋 Só as 5 Tags</button>
+        </div>
       </div>
 
-      <!-- 2. DESCRIÇÃO ENGAJADORA -->
-      <div class="meta-box">
+      <!-- 2. KIT YOUTUBE SHORTS (LIMITE ESTRITO DE 100 LETRAS) -->
+      <div class="meta-box" style="border-color:rgba(255,61,87,0.55); background:rgba(255,61,87,0.07);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <strong style="margin:0;">📝 DESCRIÇÃO DO VÍDEO</strong>
-          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('description')">📋 Copiar Descrição</button>
+          <div>
+            <strong style="margin:0; color:#ff6b81;">🔴 2. DESCRIÇÃO YOUTUBE SHORTS (MÁX. 100 LETRAS)</strong>
+            <span id="ytCharCountBadge" style="display:inline-block; margin-left:6px; font-size:0.68rem; background:#00e676; color:#000; font-weight:900; padding:2px 7px; border-radius:99px;">≤100 LETRAS ✅</span>
+          </div>
+          <button class="btn-secondary" style="padding:6px 12px; font-size:0.75rem; border-color:#ff6b81; color:#ff6b81; font-weight:800;" onclick="copyField('youtubeShortText')">📋 Copiar p/ Shorts</button>
         </div>
-        <p id="videoDescDisplay" style="color:#d0d0e5; white-space:pre-line;"></p>
+        <p id="videoTitleDisplay" style="color:#fff; font-weight:800; font-size:0.92rem; line-height:1.4;"></p>
       </div>
 
-      <!-- 3. HASHTAGS VIRAIS -->
-      <div class="meta-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <strong style="margin:0;">🏷️ HASHTAGS VIRAIS</strong>
-          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('hashtags')">📋 Copiar Hashtags</button>
-        </div>
-        <p id="videoTagsDisplay" style="color:var(--primary); font-weight:700; word-break:break-word;"></p>
-      </div>
-
-      <!-- 4. PRIMEIRO COMENTÁRIO FIXADO (GATILHO DE ALGORITMO STUDIO 3.0) -->
+      <!-- 3. PRIMEIRO COMENTÁRIO FIXADO (PARA COLAR NOS COMENTÁRIOS) -->
       <div class="meta-box" style="border-color:rgba(255,230,0,0.45); background:rgba(255,230,0,0.06);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <strong style="margin:0; color:#ffe600;">💬 1º COMENTÁRIO FIXADO (COLE NO TOPO DOS COMENTÁRIOS)</strong>
-          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem; border-color:#ffe600; color:#ffe600;" onclick="copyField('pinnedComment')">📋 Copiar Comentário</button>
+          <strong style="margin:0; color:#ffe600;">💬 3. 1º COMENTÁRIO FIXADO (ENGAJAMENTO)</strong>
+          <button class="btn-secondary" style="padding:6px 12px; font-size:0.75rem; border-color:#ffe600; color:#ffe600; font-weight:800;" onclick="copyField('pinnedComment')">📋 Copiar Comentário</button>
         </div>
-        <p id="videoPinnedDisplay" style="color:#fff8c6; font-size:0.84rem; font-weight:600; line-height:1.45;"></p>
-      </div>
-    </div>
-
-    <!-- CONECTAR CONTAS: YOUTUBE SHORTS & TIKTOK API -->
-    <div class="card" id="accountsCard">
-      <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleAccountsPanel()">
-        <div>
-          <h3 style="font-size:0.92rem; margin:0; color:#00f0ff;">🔗 Conectar Contas (YouTube & TikTok Auto-Post)</h3>
-          <p style="font-size:0.73rem; color:var(--muted); margin-top:2px;">Configure os tokens gratuitos para postar 100% automático com Título, Descrição e Hashtags</p>
-        </div>
-        <span id="accountsToggleArrow" style="font-size:0.85rem; color:var(--primary); font-weight:900;">⚙️ Configurar</span>
+        <p id="videoPinnedDisplay" style="color:#fff8c6; font-size:0.83rem; font-weight:600; line-height:1.45;"></p>
       </div>
 
-      <div id="accountsFormBody" style="display:none; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
-        <!-- YOUTUBE SHORTS CONFIG -->
-        <div style="background:rgba(255,0,55,0.06); border:1px solid rgba(255,61,87,0.35); border-radius:12px; padding:12px; margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="font-size:0.82rem; color:#ff6b81;">🔴 YouTube Data API v3 (Shorts Automático)</strong>
-            <a href="https://developers.google.com/oauthplayground/?scope=https://www.googleapis.com/auth/youtube.upload" target="_blank" style="font-size:0.72rem; color:#00f0ff; text-decoration:underline;">🔑 Gerar Token Grátis (1 Min)</a>
-          </div>
-          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
-            Dica Rápida: Clique em <strong>"Gerar Token Grátis"</strong> acima (Google OAuth Playground), autorize sua conta do YouTube no escopo <code>youtube.upload</code>, clique em <em>Exchange authorization code for tokens</em> e cole o <strong>Access Token</strong> (ou Refresh Token + Client ID/Secret) abaixo:
-          </p>
-          <div class="field" style="margin-bottom:8px;">
-            <label>YouTube Access Token (Rápido)</label>
-            <input id="ytAccessToken" type="password" placeholder="ya29.a0AfH6SM..." />
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-            <div class="field">
-              <label>Client ID (Opcional p/ Permanente)</label>
-              <input id="ytClientId" type="text" placeholder="...apps.googleusercontent.com" />
-            </div>
-            <div class="field">
-              <label>Client Secret (Opcional)</label>
-              <input id="ytClientSecret" type="password" placeholder="GOCSPX-..." />
-            </div>
-          </div>
-          <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px;">
-            <div class="field">
-              <label>Refresh Token (Opcional p/ Nunca Expirar)</label>
-              <input id="ytRefreshToken" type="password" placeholder="1//04..." />
-            </div>
-            <div class="field">
-              <label>Privacidade</label>
-              <select id="ytPrivacyStatus">
-                <option value="public" selected>🌍 Público</option>
-                <option value="unlisted">🔗 Não Listado</option>
-                <option value="private">🔒 Privado</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- TIKTOK API V2 CONFIG -->
-        <div style="background:rgba(0,240,255,0.05); border:1px solid rgba(0,240,255,0.3); border-radius:12px; padding:12px; margin-bottom:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="font-size:0.82rem; color:#00f0ff;">🎵 TikTok Content Posting API v2</strong>
-            <a href="https://developers.tiktok.com/" target="_blank" style="font-size:0.72rem; color:#00e676; text-decoration:underline;">🔑 Portal TikTok Developers</a>
-          </div>
-          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
-            Cole abaixo seu <strong>Access Token</strong> da API oficial do TikTok (escopo <code>video.publish</code>). <em>Nota: Se preferir não criar conta de desenvolvedor no TikTok, o botão verde <strong>"📲 Abrir App TikTok / YT"</strong> já envia o vídeo pronto com o Título, Descrição e Hashtags copiados automaticamente para colar em 1 toque!</em>
-          </p>
-          <div class="field">
-            <label>TikTok OAuth Access Token</label>
-            <input id="tkAccessToken" type="password" placeholder="act.example..." />
-          </div>
-        </div>
-
-        <button class="hero-btn" style="padding:13px; font-size:0.9rem; background:linear-gradient(135deg, #00c853, #009624); margin-bottom:14px;" onclick="saveConnectedAccounts()">
-          💾 SALVAR CONEXÃO DAS CONTAS
-        </button>
-
-        <!-- GITHUB + VERCEL 1-CLICK CLOUD DEPLOY -->
-        <div style="background:rgba(112,0,255,0.08); border:1px solid rgba(157,78,221,0.45); border-radius:12px; padding:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="font-size:0.82rem; color:#d0a2ff;">🐙 Subir Projeto pro Seu GitHub + Vercel (1-Click)</strong>
-            <a href="https://github.com/settings/tokens/new?scopes=repo&description=ShortsFactoryAI" target="_blank" style="font-size:0.72rem; color:#00f0ff; text-decoration:underline;">🔑 Gerar Token GitHub (10s)</a>
-          </div>
-          <p style="font-size:0.72rem; color:#c8c9dc; margin-bottom:8px; line-height:1.35;">
-            Quer hospedar sua própria cópia no GitHub e conectar na Vercel? Clique em <strong>"Gerar Token GitHub"</strong> acima, copie o token (<code>ghp_...</code>), cole abaixo e toque em Enviar: nós criamos o repositório completo na sua conta automaticamente!
-          </p>
-          <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-bottom:8px;">
-            <div class="field">
-              <label>GitHub Personal Access Token (ghp_...)</label>
-              <input id="ghDeployToken" type="password" placeholder="ghp_xxxxxxxxxxxx" />
-            </div>
-            <div class="field">
-              <label>Nome do Repositório</label>
-              <input id="ghRepoName" type="text" value="shorts-factory-ai" />
-            </div>
-          </div>
-          <button id="btnDeployGitHub" class="btn-secondary" style="width:100%; border-color:#d0a2ff; color:#e0c3ff; font-weight:800; padding:11px;" onclick="deployToUserGitHub()">
-            🐙 CRIAR REPOSITÓRIO NO MEU GITHUB + ABRIR VERCEL
-          </button>
-          <div id="ghDeployResultBox" style="display:none; margin-top:10px; padding:10px; border-radius:8px; background:rgba(0,230,118,0.1); border:1px solid #00e676; font-size:0.76rem; line-height:1.45;"></div>
-        </div>
+      <!-- CONEXÃO DO LOOP INFINITO (FINAL -> INÍCIO 0:00) -->
+      <div class="meta-box" style="border-color:rgba(0,230,118,0.35); background:rgba(0,230,118,0.05);">
+        <strong style="color:#00e676; margin-bottom:6px;">🔁 CONEXÃO DO LOOP INFINITO (FINAL ➔ INÍCIO 0:00)</strong>
+        <div id="videoLoopBridgeDisplay" style="font-size:0.78rem; color:#e0ffe8; line-height:1.4;"></div>
       </div>
     </div>
 
@@ -735,9 +627,10 @@
 
     function renderScriptEditor(script) {
       document.getElementById('scriptPreviewBox').style.display = 'block';
-      document.getElementById('editScriptTitle').value = script.title || '';
-      document.getElementById('editScriptDesc').value = script.description || '';
-      document.getElementById('editScriptTags').value = script.hashtags || '';
+      const seo = extractSeoMetadata(script);
+      document.getElementById('editScriptTitle').value = seo.youtubeShortText || script.title || '';
+      document.getElementById('editScriptDesc').value = seo.description || '';
+      document.getElementById('editScriptTags').value = seo.hashtags || '';
 
       const scenesContainer = document.getElementById('previewScriptScenes');
       const scenes = script.scenes || [];
@@ -760,9 +653,11 @@
 
     function syncCurrentScriptFromInputs() {
       if (!currentPreviewScript) return null;
-      const title = document.getElementById('editScriptTitle').value.trim() || currentPreviewScript.title;
+      const rawInputTitle = document.getElementById('editScriptTitle').value.trim().slice(0, 100) || currentPreviewScript.title;
+      const cleanCoverTitle = rawInputTitle.replace(/#[\wÀ-ÿ]+/g, '').trim() || currentPreviewScript.title;
       const description = document.getElementById('editScriptDesc').value.trim() || currentPreviewScript.description;
-      const hashtags = document.getElementById('editScriptTags').value.trim() || currentPreviewScript.hashtags;
+      const rawTags = (document.getElementById('editScriptTags').value.trim().match(/#[\wÀ-ÿ]+/g) || []).slice(0, 5);
+      const hashtags = rawTags.length > 0 ? rawTags.join(' ') : currentPreviewScript.hashtags;
       const narrationEls = Array.from(document.querySelectorAll('.scene-narration-input'));
       const photoEls = Array.from(document.querySelectorAll('.scene-photo-input'));
 
@@ -771,17 +666,19 @@
         return {
           ...orig,
           narration: el.value.trim() || orig.narration || 'Fato curioso impressionante.',
-          imageQuery: (photoEls[idx] && photoEls[idx].value.trim()) || orig.imageQuery || title,
-          sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${title.slice(0, 28)}`
+          imageQuery: (photoEls[idx] && photoEls[idx].value.trim()) || orig.imageQuery || cleanCoverTitle,
+          sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${cleanCoverTitle.slice(0, 28)}`
         };
       });
 
       currentPreviewScript = {
         ...currentPreviewScript,
-        title,
+        title: cleanCoverTitle,
+        youtubeShortText: rawInputTitle,
         description,
         hashtags,
-        caption: `${description}\n\n${hashtags}`,
+        tiktokPostText: `${cleanCoverTitle}\n\n${description}\n\n${hashtags}`,
+        caption: `${cleanCoverTitle}\n\n${description}\n\n${hashtags}`,
         scenes: updatedScenes
       };
       updateLiveLoopBridge();
@@ -1009,20 +906,79 @@
     }
 
     function extractSeoMetadata(video) {
-      const title = video.title || 'Fato Curioso Impressionante';
-      let description = video.description || '';
-      let hashtags = video.hashtags || '';
-      if ((!description || !hashtags) && video.caption) {
+      const rawTitle = (video.title || 'Fato Curioso Impressionante').replace(/#[\wÀ-ÿ]+/g, '').trim();
+      let description = (video.description || '').replace(/#[\wÀ-ÿ]+/g, '').trim();
+      let rawTags = (video.hashtags || video.caption || '').match(/#[\wÀ-ÿ]+/g) || [];
+
+      if (!description && video.caption) {
         const parts = video.caption.split(/(?=#)/);
-        if (!description) description = (parts[0] || '').trim();
-        if (!hashtags) {
-          const m = video.caption.match(/#[\wÀ-ÿ]+/g);
-          hashtags = m ? m.join(' ') : '#fatoscuriosos #curiosidades #shorts #fyp';
+        description = (parts[0] || '').trim();
+      }
+      if (!description) {
+        description = `${rawTitle}! 😱 Assista até o final para entender todos os detalhes reais.`;
+      }
+
+      // 1. STRICT 5 HASHTAGS FOR TIKTOK
+      const topicTag = '#' + (video.sourceTopic || rawTitle)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s*\([^)]*\)/g, '')
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 22);
+
+      const candidateTags = [
+        topicTag.length > 2 ? topicTag : '#misterios',
+        '#fatoscuriosos',
+        '#vocesabia',
+        '#curiosidades',
+        '#ciencia',
+        ...rawTags
+      ];
+      const fiveTags = [];
+      const seen = new Set();
+      for (const t of candidateTags) {
+        const low = t.toLowerCase();
+        if (low.length > 2 && !seen.has(low) && low !== '#shorts' && low !== '#tiktokbrasil' && low !== '#fyp') {
+          seen.add(low);
+          fiveTags.push(t);
+        }
+        if (fiveTags.length === 5) break;
+      }
+      while (fiveTags.length < 5) {
+        for (const f of ['#fatoscuriosos', '#vocesabia', '#curiosidades', '#ciencia', '#historia']) {
+          if (!fiveTags.includes(f) && fiveTags.length < 5) fiveTags.push(f);
         }
       }
-      const cleanT = (video.sourceTopic || title).replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+      const hashtags = fiveTags.slice(0, 5).join(' ');
+
+      // 2. STRICT <=100 CHARACTERS FOR YOUTUBE SHORTS
+      let youtubeShortText = video.youtubeShortText || '';
+      if (!youtubeShortText || youtubeShortText.length > 100) {
+        const ytSuffix = ' #shorts #curiosidades';
+        const maxBase = 98 - ytSuffix.length;
+        let base = rawTitle;
+        if (base.length > maxBase) {
+          base = base.slice(0, maxBase - 1).replace(/\s+\S*$/, '').trim() + '…';
+        }
+        youtubeShortText = `${base}${ytSuffix}`;
+      }
+
+      // 3. FULL TIKTOK MANUAL DESCRIPTION (Hook + Body + 5 Hashtags)
+      const tiktokPostText = `${rawTitle}\n\n${description}\n\n${hashtags}`;
+
+      const cleanT = (video.sourceTopic || rawTitle).replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
       const pinnedComment = video.pinnedComment || `📌 PERGUNTA DO DIA: Por R$ 5 MILHÕES na conta agora, você teria coragem de encarar "${cleanT}" de perto por 10 minutos ou jamais arriscaria? 👇 Comente sua resposta!`;
-      return { title, description, hashtags, pinnedComment };
+
+      return {
+        title: rawTitle,
+        youtubeShortText,
+        description,
+        hashtags,
+        tagCount: fiveTags.length,
+        tiktokPostText,
+        pinnedComment
+      };
     }
 
     async function openHistoryVideo(idx) {
@@ -1056,11 +1012,25 @@
       dl.download = (video.title || 'short').replace(/[^\wÀ-ÿ\-]+/g, '_').slice(0, 35) + '.mp4';
 
       const seo = extractSeoMetadata(video);
-      document.getElementById('videoTitleDisplay').textContent = seo.title;
-      document.getElementById('videoDescDisplay').textContent = seo.description;
-      document.getElementById('videoTagsDisplay').textContent = seo.hashtags;
+
+      // 1. Populate TikTok Box (Description + 5 Hashtags)
+      const tkDisplay = document.getElementById('videoTikTokDisplay');
+      if (tkDisplay) tkDisplay.textContent = seo.tiktokPostText;
+      const tagsDisplay = document.getElementById('videoTagsDisplay');
+      if (tagsDisplay) tagsDisplay.textContent = seo.hashtags;
+      const tkBadge = document.getElementById('tiktokTagsBadge');
+      if (tkBadge) tkBadge.textContent = `${seo.tagCount}/5 HASHTAGS ✅`;
+
+      // 2. Populate YouTube Shorts Box (<=100 Letters)
+      const ytDisplay = document.getElementById('videoTitleDisplay');
+      if (ytDisplay) ytDisplay.textContent = seo.youtubeShortText;
+      const ytBadge = document.getElementById('ytCharCountBadge');
+      if (ytBadge) ytBadge.textContent = `${seo.youtubeShortText.length}/100 LETRAS ✅`;
+
+      // 3. Populate Pinned Comment
       const pinnedEl = document.getElementById('videoPinnedDisplay');
       if (pinnedEl) pinnedEl.textContent = seo.pinnedComment;
+
       document.getElementById('videoDurationBadge').textContent = (video.duration || 65) + 's • 9:16 HD • 🔁 Loop';
 
       const lb = video.loopBridge || {
@@ -1080,9 +1050,11 @@
       const seo = extractSeoMetadata(currentVideoData);
       const val = seo[field] || '';
       const labels = {
-        title: '📌 Título copiado!',
+        tiktokPostText: '🎵 Descrição do TikTok (com 5 Hashtags) copiada! Só colar no TikTok!',
+        youtubeShortText: `🔴 Texto do YouTube Shorts (${seo.youtubeShortText.length}/100 letras) copiado!`,
+        title: '🔴 Texto do YouTube Shorts copiado!',
         description: '📝 Descrição copiada!',
-        hashtags: '🏷️ Hashtags copiadas!',
+        hashtags: '🏷️ 5 Hashtags do TikTok copiadas!',
         pinnedComment: '💬 1º Comentário Fixado copiado! Cole no topo dos comentários!'
       };
       try {
@@ -1096,10 +1068,9 @@
     async function copyCaption() {
       if (!currentVideoData) return;
       const seo = extractSeoMetadata(currentVideoData);
-      const fullText = `${seo.title}\n\n${seo.description}\n\n${seo.hashtags}`;
       try {
-        await navigator.clipboard.writeText(fullText);
-        showToast('⚡ Kit Completo (Título + Descrição + Hashtags) copiado!');
+        await navigator.clipboard.writeText(seo.tiktokPostText);
+        showToast('🎵 Descrição completa do TikTok (com 5 Hashtags) copiada!');
       } catch (e) {
         showToast('Copie manualmente abaixo!');
       }
