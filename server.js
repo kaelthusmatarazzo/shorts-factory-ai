@@ -27,8 +27,8 @@ app.post('/api/new-script', async (req, res) => {
   try {
     delete require.cache[require.resolve('./src/generator')];
     const { generateUniqueScript: genScript } = require('./src/generator');
-    const { niche = 'curiosidades', customTopic = '', durationMode = 'monetized' } = req.body || {};
-    const scriptData = await genScript(niche, customTopic, durationMode);
+    const { niche = 'curiosidades', customTopic = '', durationMode = 'monetized', excludeTopics = [] } = req.body || {};
+    const scriptData = await genScript(niche, customTopic, durationMode, Array.isArray(excludeTopics) ? excludeTopics : []);
     res.json({ script: scriptData });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erro ao gerar roteiro inédito' });
@@ -37,7 +37,8 @@ app.post('/api/new-script', async (req, res) => {
 
 // Start a 1-click Short generation job
 app.post('/api/generate', async (req, res) => {
-  const { niche = 'curiosidades', voice = 'pt-BR-ThalitaMultilingualNeural', customTopic = '', durationMode = 'monetized', scriptOverride = null } = req.body || {};
+  const { niche = 'curiosidades', voice = 'pt-BR-ThalitaMultilingualNeural', customTopic = '', durationMode = 'monetized', scriptOverride = null, excludeTopics = [] } = req.body || {};
+  const safeExclude = Array.isArray(excludeTopics) ? excludeTopics : [];
   const jobId = `job_${Date.now()}`;
 
   jobs.set(jobId, {
@@ -54,9 +55,9 @@ app.post('/api/generate', async (req, res) => {
       const { buildShortVideo: buildVid } = require('./src/video_renderer');
       const scriptData = (scriptOverride && scriptOverride.title && Array.isArray(scriptOverride.scenes))
         ? scriptOverride
-        : await genScript(niche, customTopic, durationMode);
+        : await genScript(niche, customTopic, durationMode, safeExclude);
       const videoResult = await buildVid(scriptData, { voice });
-      saveHist(videoResult);
+      saveHist(videoResult, safeExclude);
       return res.json({ jobId, directResult: videoResult });
     } catch (err) {
       return res.status(500).json({ error: err.message || 'Erro no Vercel Serverless' });
@@ -75,7 +76,7 @@ app.post('/api/generate', async (req, res) => {
 
       const scriptData = (scriptOverride && scriptOverride.title && Array.isArray(scriptOverride.scenes))
         ? scriptOverride
-        : await genScript(niche, customTopic, durationMode);
+        : await genScript(niche, customTopic, durationMode, safeExclude);
       jobs.set(jobId, {
         id: jobId,
         status: 'running',
@@ -92,7 +93,7 @@ app.post('/api/generate', async (req, res) => {
         });
       });
 
-      saveHist(videoResult);
+      saveHist(videoResult, safeExclude);
 
       jobs.set(jobId, {
         id: jobId,
@@ -126,6 +127,8 @@ app.get('/api/history', (req, res) => {
   const history = loadHist();
   res.json({
     tunnelUrl: currentTunnelUrl,
+    usedTopics: history.usedTopics || [],
+    usedTitles: history.usedTitles || [],
     videos: history.videos || []
   });
 });
