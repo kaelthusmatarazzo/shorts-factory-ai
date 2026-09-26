@@ -336,7 +336,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       narration: `Se você adora descobrir fatos curiosos reais como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${chosenLoopBridge.endText}`,
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `planet earth space cosmos`,
-      sceneLabel: `7/7 • Loop Infinito 🔁`,
+      sceneLabel: `7/7 • ${cleanTopic}`,
       isLoopBridgeScene: true
     }
   ];
@@ -354,7 +354,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
     hashtags,
     caption: `${description}\n\n${hashtags}`,
     loopBridge: chosenLoopBridge,
-    badge: '🧠 FATOS CURIOSOS • LOOP 🔁',
+    badge: 'FATOS CURIOSOS',
     musicMood: 'dark',
     themeColor: '#00f0ff',
     scenes: finalScenes
