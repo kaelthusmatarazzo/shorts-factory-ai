@@ -2,13 +2,43 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const BUNDLED_DATA_DIR = path.join(__dirname, '..', 'data');
+const BUNDLED_HISTORY_FILE = path.join(BUNDLED_DATA_DIR, 'history.json');
 const DATA_DIR = process.env.VERCEL
   ? path.join(os.tmpdir(), 'shorts-factory-data')
-  : path.join(__dirname, '..', 'data');
+  : BUNDLED_DATA_DIR;
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
+}
+
+// In-memory global cache across warm serverless invocations
+if (!global.__SHORTS_FACTORY_HISTORY__) {
+  global.__SHORTS_FACTORY_HISTORY__ = { usedTitles: [], usedTopics: [], videos: [] };
+}
+
+function normalizeTopicKey(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+function isTopicAlreadyUsed(candidate, usedList = []) {
+  const candKey = normalizeTopicKey(candidate);
+  if (!candKey) return false;
+  for (const item of usedList) {
+    const itemKey = normalizeTopicKey(item);
+    if (!itemKey) continue;
+    if (candKey === itemKey || (candKey.length > 5 && itemKey.includes(candKey)) || (itemKey.length > 5 && candKey.includes(itemKey))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function normalizeMetadata(item) {
@@ -55,49 +85,93 @@ function normalizeMetadata(item) {
   return item;
 }
 
-function loadHistory() {
+function loadHistory(extraExclude = []) {
+  let diskData = { usedTitles: [], usedTopics: [], videos: [] };
   try {
     if (fs.existsSync(HISTORY_FILE)) {
-      const data = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
-      if (Array.isArray(data.videos)) {
-        data.videos = data.videos.map(normalizeMetadata);
-      }
-      return data;
+      diskData = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+    } else if (fs.existsSync(BUNDLED_HISTORY_FILE)) {
+      diskData = JSON.parse(fs.readFileSync(BUNDLED_HISTORY_FILE, 'utf8'));
     }
   } catch (e) {}
-  return { usedTitles: [], usedTopics: [], videos: [] };
+
+  const mem = global.__SHORTS_FACTORY_HISTORY__ || { usedTitles: [], usedTopics: [], videos: [] };
+  const mergedTitles = Array.from(new Set([...(diskData.usedTitles || []), ...(mem.usedTitles || []), ...(Array.isArray(extraExclude) ? extraExclude : [])]));
+  const mergedTopics = Array.from(new Set([...(diskData.usedTopics || []), ...(mem.usedTopics || []), ...(Array.isArray(extraExclude) ? extraExclude : [])]));
+
+  // Deduplicate videos by title
+  const seenVidTitles = new Set();
+  const mergedVideos = [];
+  for (const v of [...(mem.videos || []), ...(diskData.videos || [])]) {
+    if (!v || !v.title) continue;
+    const k = normalizeTopicKey(v.title);
+    if (!seenVidTitles.has(k)) {
+      seenVidTitles.add(k);
+      mergedVideos.push(normalizeMetadata(v));
+      if (v.title && !mergedTitles.includes(v.title)) mergedTitles.push(v.title);
+      if (v.sourceTopic && !mergedTopics.includes(v.sourceTopic)) mergedTopics.push(v.sourceTopic);
+    }
+  }
+
+  const finalHistory = {
+    usedTitles: mergedTitles,
+    usedTopics: mergedTopics,
+    videos: mergedVideos.slice(0, 50)
+  };
+  global.__SHORTS_FACTORY_HISTORY__ = finalHistory;
+  return finalHistory;
 }
 
-function saveToHistory(videoMeta) {
-  const history = loadHistory();
-  if (!history.usedTitles) history.usedTitles = [];
-  if (!history.usedTopics) history.usedTopics = [];
-
+function saveToHistory(videoMeta, extraExclude = []) {
+  const history = loadHistory(extraExclude);
   const normalized = normalizeMetadata(videoMeta);
 
-  if (!history.usedTitles.includes(normalized.title)) {
+  if (normalized.title && !history.usedTitles.includes(normalized.title)) {
     history.usedTitles.push(normalized.title);
   }
   if (normalized.sourceTopic && !history.usedTopics.includes(normalized.sourceTopic)) {
     history.usedTopics.push(normalized.sourceTopic);
   }
-  history.videos.unshift(normalized);
+
+  // Remove existing entry with same title before unshifting
+  const normKey = normalizeTopicKey(normalized.title);
+  history.videos = (history.videos || []).filter(v => normalizeTopicKey(v.title) !== normKey);
+  history.videos.unshift({
+    ...normalized,
+    createdAt: normalized.createdAt || new Date().toISOString()
+  });
   history.videos = history.videos.slice(0, 50);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
+
+  global.__SHORTS_FACTORY_HISTORY__ = history;
+  try {
+    // On Vercel, avoid writing giant base64 video URLs into history.json if >2MB, keep lightweight metadata
+    const diskCopy = {
+      usedTitles: history.usedTitles,
+      usedTopics: history.usedTopics,
+      videos: history.videos.map(v => ({
+        ...v,
+        url: (process.env.VERCEL && v.url && v.url.startsWith('data:video/mp4;base64,')) ? v.url : v.url
+      }))
+    };
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(diskCopy, null, 2), 'utf8');
+  } catch (e) {}
+  return history;
 }
 
-function rememberGeneratedScript(title, sourceTopic) {
-  const history = loadHistory();
-  if (!history.usedTitles) history.usedTitles = [];
-  if (!history.usedTopics) history.usedTopics = [];
+function rememberGeneratedScript(title, sourceTopic, extraExclude = []) {
+  const history = loadHistory(extraExclude);
   if (title && !history.usedTitles.includes(title)) history.usedTitles.push(title);
   if (sourceTopic && !history.usedTopics.includes(sourceTopic)) history.usedTopics.push(sourceTopic);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
+  global.__SHORTS_FACTORY_HISTORY__ = history;
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
+  } catch (e) {}
 }
 
 function clearHistory() {
   const empty = { usedTitles: [], usedTopics: [], videos: [] };
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(empty, null, 2), 'utf8');
+  global.__SHORTS_FACTORY_HISTORY__ = empty;
+  try { fs.writeFileSync(HISTORY_FILE, JSON.stringify(empty, null, 2), 'utf8'); } catch (e) {}
   const videosDir = path.join(__dirname, '..', 'public', 'videos');
   if (fs.existsSync(videosDir)) {
     for (const f of fs.readdirSync(videosDir)) {
@@ -182,43 +256,55 @@ async function fetchFullWikipediaArticle(title) {
   return null;
 }
 
-async function fetchUnusedWikipediaFact(niche = 'curiosidades') {
-  const history = loadHistory();
-  const usedTopics = new Set([...(history.usedTopics || []), ...(history.usedTitles || [])]);
+async function fetchUnusedWikipediaFact(niche = 'curiosidades', extraExclude = []) {
+  const history = loadHistory(extraExclude);
+  const allUsedList = Array.from(new Set([
+    ...(history.usedTopics || []),
+    ...(history.usedTitles || []),
+    ...(Array.isArray(extraExclude) ? extraExclude : [])
+  ]));
 
-  const catList = WIKI_CATEGORIES[niche] || WIKI_CATEGORIES.curiosidades;
-  const randomCat = catList[Math.floor(Math.random() * catList.length)];
+  const catList = [...(WIKI_CATEGORIES[niche] || WIKI_CATEGORIES.curiosidades)].sort(() => Math.random() - 0.5);
   const alphabet = 'ABCDEFGHIJLMNOPQRSTUVZ';
-  const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
 
-  try {
-    const url = `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmstartsortkeyprefix=${randomLetter}&cmlimit=50&format=json`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
-    const data = await res.json();
-    const members = (data.query?.categorymembers || [])
-      .filter(m => m.ns === 0 && !m.title.startsWith('Lista') && !usedTopics.has(m.title));
+  for (let cIdx = 0; cIdx < Math.min(3, catList.length); cIdx++) {
+    const randomCat = catList[cIdx];
+    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
+    try {
+      // Try both random prefix and full category list so small categories never get stuck on one article
+      const url = cIdx === 0
+        ? `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmstartsortkeyprefix=${randomLetter}&cmlimit=100&format=json`
+        : `https://pt.wikipedia.org/w/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(randomCat)}&cmtype=page&cmlimit=150&format=json`;
+      const res = await fetch(url, { headers: { 'User-Agent': 'ShortsFactoryPro/4.0' } });
+      const data = await res.json();
+      const members = (data.query?.categorymembers || [])
+        .filter(m => m.ns === 0 && !m.title.startsWith('Lista') && !isTopicAlreadyUsed(m.title, allUsedList));
 
-    if (members.length > 0) {
-      const shuffled = members.sort(() => Math.random() - 0.5).slice(0, 6);
-      for (const item of shuffled) {
-        const fullArt = await fetchFullWikipediaArticle(item.title);
-        if (fullArt) return fullArt;
+      if (members.length > 0) {
+        const shuffled = members.sort(() => Math.random() - 0.5).slice(0, 8);
+        for (const item of shuffled) {
+          if (isTopicAlreadyUsed(item.title, allUsedList)) continue;
+          const fullArt = await fetchFullWikipediaArticle(item.title);
+          if (fullArt && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) {
+            return fullArt;
+          }
+        }
       }
+    } catch (e) {
+      console.log('Wikipedia category discovery notice:', e.message);
     }
-  } catch (e) {
-    console.log('Wikipedia category discovery notice:', e.message);
   }
 
   try {
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       const randRes = await fetch('https://pt.wikipedia.org/api/rest_v1/page/random/summary', {
         headers: { 'User-Agent': 'ShortsFactoryPro/4.0' }
       });
       if (randRes.ok) {
         const randData = await randRes.json();
-        if (randData.title && !usedTopics.has(randData.title)) {
+        if (randData.title && !isTopicAlreadyUsed(randData.title, allUsedList)) {
           const fullArt = await fetchFullWikipediaArticle(randData.title);
-          if (fullArt) return fullArt;
+          if (fullArt && !isTopicAlreadyUsed(fullArt.topic, allUsedList)) return fullArt;
         }
       }
     }
@@ -361,7 +447,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   });
 }
 
-async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic = '', durationMode = 'monetized') {
+async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic = '', durationMode = 'monetized', extraExclude = []) {
   if (requestedNiche === '__clear_history__') {
     return clearHistory();
   }
@@ -397,8 +483,7 @@ async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic
     const parsed = typeof customTopic === 'string' ? JSON.parse(customTopic) : customTopic;
     return await deployProjectToGitHub(parsed.token, parsed.repoName || 'shorts-factory-ai');
   }
-  const history = loadHistory();
-  const usedTitles = Array.from(new Set(history.usedTitles || [])).slice(-25);
+  loadHistory(extraExclude);
 
   const niches = ['curiosidades', 'misterios', 'historia', 'futuro', 'motivacao', 'financas'];
   const targetNiche = (requestedNiche && requestedNiche !== 'auto')
@@ -407,7 +492,7 @@ async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic
 
   let wikiFact = null;
   if (!customTopic || !customTopic.trim()) {
-    wikiFact = await fetchUnusedWikipediaFact(targetNiche);
+    wikiFact = await fetchUnusedWikipediaFact(targetNiche, extraExclude);
   } else {
     wikiFact = await fetchFullWikipediaArticle(customTopic.trim());
   }
@@ -415,7 +500,7 @@ async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic
   // Build 7-scene 62s+ Monetized Script with Infinite Loop directly from verified Wikipedia article + AI
   if (wikiFact) {
     const built = buildMonetizedViralScriptFromWikiFact(wikiFact, targetNiche, durationMode);
-    rememberGeneratedScript(built.title, built.sourceTopic);
+    rememberGeneratedScript(built.title, built.sourceTopic, extraExclude);
     return built;
   }
 
@@ -424,7 +509,7 @@ async function generateUniqueScript(requestedNiche = 'curiosidades', customTopic
     topic: fallbackTopic,
     extract: `${fallbackTopic} é um fenômeno extraordinário estudado por cientistas ao redor do globo. Suas propriedades desafiam o senso comum e revelam como a natureza esconde segredos fascinantes. Pesquisas recentes mostraram detalhes inéditos sobre sua estrutura. Quando observado sob condições controladas, apresenta reações únicas na física moderna. Civilizações antigas já tentavam explicar esse mistério olhando para a natureza. Hoje sabemos que esse processo é fundamental para entender a evolução do planeta Terra.`
   }, targetNiche, durationMode);
-  rememberGeneratedScript(emergencyScript.title, fallbackTopic);
+  rememberGeneratedScript(emergencyScript.title, fallbackTopic, extraExclude);
   return emergencyScript;
 }
 
