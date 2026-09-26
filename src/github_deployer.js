@@ -8,6 +8,7 @@ const FILES_TO_PUSH = [
   'api/index.js',
   'public/index.html',
   'src/fonts/Hormozi-Black.ttf',
+  'src/curated_facts_bank.js',
   'src/generator.js',
   'src/tts_and_audio.js',
   'src/video_renderer.js',
