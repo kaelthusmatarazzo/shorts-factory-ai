@@ -235,12 +235,12 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 
   if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
 
-  // 1. Single Call to PT Wikipedia: get exact English Wikipedia article title (preserving "(tree)" / "(moon)" disambiguation!)
+  // 1. Fast PT Wikipedia Lookup (2.2s timeout)
   try {
     const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=langlinks|pageimages&lllang=en&piprop=original|thumbnail&pithumbsize=1080&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(4000)
+      signal: AbortSignal.timeout(2200)
     });
     if (ptRes.ok) {
       const ptData = await ptRes.json();
@@ -256,24 +256,8 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 1B. Direct Images from the EXACT English Wikipedia Article (100% guaranteed topic match!)
+  // 2. Run English Wikipedia Article Images + Wikimedia Commons Search IN PARALLEL (max 2.5s total!)
   const exactArticleTarget = enTitleFull || scriptData.wikiSearch || fullSourceTopic;
-  try {
-    const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&redirects=1&format=json`;
-    const enArtRes = await fetch(enArtImgsUrl, {
-      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(3800)
-    });
-    if (enArtRes.ok) {
-      const enArtData = await enArtRes.json();
-      for (const p of Object.values(enArtData.query?.pages || {})) {
-        const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
-        addCandidate(imgUrl, p.title || exactArticleTarget);
-      }
-    }
-  } catch (e) {}
-
-  // 2. Single Combined Scientific OR Query on Wikimedia Commons (gsrlimit=50)
   const entitySet = new Set();
   if (disambiguatedTerm) entitySet.add(disambiguatedTerm);
   if (enTitleFull && !disambiguatedTerm) entitySet.add(enTitleFull);
@@ -284,43 +268,39 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   }
   if (entitySet.size === 0) entitySet.add(rawTopic);
-
   const uniqueEntities = Array.from(entitySet).slice(0, 4);
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
 
-  try {
-    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=50&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-    const cRes = await fetch(commonsUrl, {
-      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(4500)
-    });
-    if (cRes.ok) {
-      const cData = await cRes.json();
-      const pages = Object.values(cData.query?.pages || {});
-      for (const p of pages) {
-        const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
-        addCandidate(imgUrl, p.title || '');
-      }
-    }
-  } catch (e) {}
-
-  if (pool.length < 14) {
-    try {
-      const broadQuery = `filetype:bitmap ${disambiguatedTerm || enTitleFull || rawTopic}`;
-      const broadUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(broadQuery)}&gsrlimit=35&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-      const bRes = await fetch(broadUrl, {
+  await Promise.allSettled([
+    (async () => {
+      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=28&prop=imageinfo&iiprop=url&iiurlwidth=800&redirects=1&format=json`;
+      const enArtRes = await fetch(enArtImgsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(4000)
+        signal: AbortSignal.timeout(2400)
       });
-      if (bRes.ok) {
-        const bData = await bRes.json();
-        for (const p of Object.values(bData.query?.pages || {})) {
+      if (enArtRes.ok) {
+        const enArtData = await enArtRes.json();
+        for (const p of Object.values(enArtData.query?.pages || {})) {
+          const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
+          addCandidate(imgUrl, p.title || exactArticleTarget);
+        }
+      }
+    })(),
+    (async () => {
+      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=45&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+      const cRes = await fetch(commonsUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(2500)
+      });
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        for (const p of Object.values(cData.query?.pages || {})) {
           const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
           addCandidate(imgUrl, p.title || '');
         }
       }
-    } catch (e) {}
-  }
+    })()
+  ]);
 
   const enTitle = enTitleClean || enTitleFull;
   console.log(`📸 [Studio 2.0 Dual-Shot Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais verificadas!`);
@@ -406,14 +386,14 @@ async function buildBaseSceneCanvas(rawPhotoBuffer, blurredBackdropBuffer, zoomF
   const scaledH = Math.round(boxH * zoomFactor);
 
   const resizedPhoto = await sharp(rawPhotoBuffer)
-    .resize(scaledW, scaledH, { fit: 'cover', position: 'attention' })
+    .resize(scaledW, scaledH, { fit: 'cover', position: 'centre' })
     .extract({
       left: Math.floor((scaledW - boxW) / 2),
       top: Math.floor((scaledH - boxH) / 2),
       width: boxW,
       height: boxH
     })
-    .sharpen({ sigma: 1.15, m1: 1.0, m2: 2.0 })
+    .sharpen({ sigma: 0.85 })
     .modulate({ brightness: 1.04, saturation: 1.14 })
     .png()
     .toBuffer();
@@ -846,17 +826,26 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     ]);
 
     const [backdropA, backdropB] = await Promise.all([
-      sharp(rawPhotoA).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer(),
-      sharp(rawPhotoB).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer()
+      sharp(rawPhotoA).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer(),
+      sharp(rawPhotoB).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer()
     ]);
 
-    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In) with 4K Sharpen
-    const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
-      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, palette.glowColor),
-      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, palette.glowColor),
-      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, palette.glowColor),
-      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, palette.glowColor)
-    ]);
+    let canvases;
+    if (process.env.VERCEL) {
+      const [cA, cB] = await Promise.all([
+        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.03, visualStyle, palette.glowColor),
+        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.05, visualStyle, palette.glowColor)
+      ]);
+      canvases = [cA, cA, cB, cB];
+    } else {
+      const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
+        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, palette.glowColor),
+        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, palette.glowColor),
+        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, palette.glowColor),
+        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, palette.glowColor)
+      ]);
+      canvases = [canvasA1, canvasA2, canvasB1, canvasB2];
+    }
 
     return {
       index: i,
@@ -868,7 +857,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       audioWavPath,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries,
-      canvases: [canvasA1, canvasA2, canvasB1, canvasB2]
+      canvases
     };
   }));
 
