@@ -7,6 +7,7 @@ const FILES_TO_PUSH = [
   'server.js',
   'api/index.js',
   'public/index.html',
+  'src/fonts/Hormozi-Black.ttf',
   'src/generator.js',
   'src/tts_and_audio.js',
   'src/video_renderer.js',
