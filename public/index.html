@@ -427,16 +427,17 @@
         </div>
       </div>
 
-      <!-- 2. KIT YOUTUBE SHORTS (LIMITE ESTRITO DE 100 LETRAS) -->
+      <!-- 2. KIT YOUTUBE SHORTS (3 OPÇÕES A/B COM LIMITE ESTRITO DE 100 LETRAS) -->
       <div class="meta-box" style="border-color:rgba(255,61,87,0.55); background:rgba(255,61,87,0.07);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <div>
-            <strong style="margin:0; color:#ff6b81;">🔴 2. DESCRIÇÃO YOUTUBE SHORTS (MÁX. 100 LETRAS)</strong>
+            <strong style="margin:0; color:#ff6b81;">🔴 2. 3 OPÇÕES DE FRASE CURTA (MÁX. 100 LETRAS)</strong>
             <span id="ytCharCountBadge" style="display:inline-block; margin-left:6px; font-size:0.68rem; background:#00e676; color:#000; font-weight:900; padding:2px 7px; border-radius:99px;">≤100 LETRAS ✅</span>
           </div>
-          <button class="btn-secondary" style="padding:6px 12px; font-size:0.75rem; border-color:#ff6b81; color:#ff6b81; font-weight:800;" onclick="copyField('youtubeShortText')">📋 Copiar p/ Shorts</button>
+          <button class="btn-secondary" style="padding:6px 12px; font-size:0.75rem; border-color:#ff6b81; color:#ff6b81; font-weight:800;" onclick="copyField('youtubeShortText')">📋 Copiar Principal</button>
         </div>
-        <p id="videoTitleDisplay" style="color:#fff; font-weight:800; font-size:0.92rem; line-height:1.4;"></p>
+        <p id="videoTitleDisplay" style="display:none;"></p>
+        <div id="shortOptions100Container" style="display:flex; flex-direction:column; gap:8px;"></div>
       </div>
 
       <!-- 3. PRIMEIRO COMENTÁRIO FIXADO (PARA COLAR NOS COMENTÁRIOS) -->
@@ -952,33 +953,65 @@
       }
       const hashtags = fiveTags.slice(0, 5).join(' ');
 
-      // 2. STRICT <=100 CHARACTERS FOR YOUTUBE SHORTS
-      let youtubeShortText = video.youtubeShortText || '';
-      if (!youtubeShortText || youtubeShortText.length > 100) {
-        const ytSuffix = ' #shorts #curiosidades';
-        const maxBase = 98 - ytSuffix.length;
-        let base = rawTitle;
-        if (base.length > maxBase) {
-          base = base.slice(0, maxBase - 1).replace(/\s+\S*$/, '').trim() + '…';
+      // 2. STRICT <=100 CHARACTERS + 3 A/B VARIATIONS FOR YOUTUBE SHORTS & TIKTOK
+      const ytSuffix = ' #shorts #curiosidades';
+      const maxBase = 98 - ytSuffix.length;
+      const clamp100 = (str) => {
+        let b = String(str || '').replace(/#[\wÀ-ÿ]+/g, '').replace(/\s+/g, ' ').trim();
+        if (b.length > maxBase) {
+          b = b.slice(0, maxBase - 1).replace(/\s+\S*$/, '').trim() + '…';
         }
-        youtubeShortText = `${base}${ytSuffix}`;
-      }
+        return `${b}${ytSuffix}`;
+      };
+
+      const cleanT = (video.sourceTopic || rawTitle).replace(/\s*\([^)]*\)/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+      const scenesJoined = Array.isArray(video.scenes) ? video.scenes.map(s => s.narration || '').join(' ') : description;
+      const numMatch = scenesJoined.match(/(\d[\d.,]*\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km|graus|°c|toneladas|anos|cobras|sementes|andares|raios))/i)
+        || scenesJoined.match(/((?:cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|setenta|oitenta|cem|duzentos|trezentos|mil)\s+(?:mil|milhões)?\s*(?:de\s+)?(?:metros|quilômetros|graus|toneladas|anos|cobras|sementes|andares|raios))/i);
+      const numSnippet = numMatch ? numMatch[1].trim() : 'Fatos Reais';
+
+      const optA = (video.youtubeShortText && video.youtubeShortText.length <= 100) ? video.youtubeShortText : clamp100(rawTitle);
+      const optB = (Array.isArray(video.shortOptions100) && video.shortOptions100[1] && video.shortOptions100[1].length <= 100)
+        ? video.shortOptions100[1]
+        : clamp100(`O Segredo Real de ${numSnippet} em ${cleanT}! 😱`);
+      const optC = (Array.isArray(video.shortOptions100) && video.shortOptions100[2] && video.shortOptions100[2].length <= 100)
+        ? video.shortOptions100[2]
+        : clamp100(`Você Teria Coragem de Ver ${cleanT} de Perto? ⚠️`);
+
+      const shortOptions100 = [
+        { label: '🔥 Opção A (Mistério)', text: optA },
+        { label: '😱 Opção B (Número Choque)', text: optB },
+        { label: '🧠 Opção C (Pergunta Desafio)', text: optC }
+      ];
+      const youtubeShortText = optA;
 
       // 3. FULL TIKTOK MANUAL DESCRIPTION (Hook + Body + 5 Hashtags)
       const tiktokPostText = `${rawTitle}\n\n${description}\n\n${hashtags}`;
 
-      const cleanT = (video.sourceTopic || rawTitle).replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
       const pinnedComment = video.pinnedComment || `📌 PERGUNTA DO DIA: Por R$ 5 MILHÕES na conta agora, você teria coragem de encarar "${cleanT}" de perto por 10 minutos ou jamais arriscaria? 👇 Comente sua resposta!`;
 
       return {
         title: rawTitle,
         youtubeShortText,
+        shortOptions100,
         description,
         hashtags,
         tagCount: fiveTags.length,
         tiktokPostText,
         pinnedComment
       };
+    }
+
+    async function copyShortOption(idx) {
+      if (!currentVideoData) return;
+      const seo = extractSeoMetadata(currentVideoData);
+      const item = (seo.shortOptions100 && seo.shortOptions100[idx]) || { text: seo.youtubeShortText };
+      try {
+        await navigator.clipboard.writeText(item.text);
+        showToast(`✅ Copiado (${item.text.length}/100 letras)! Só colar no Shorts ou TikTok!`);
+      } catch (e) {
+        showToast('Copie manualmente abaixo!');
+      }
     }
 
     async function openHistoryVideo(idx) {
@@ -1021,11 +1054,24 @@
       const tkBadge = document.getElementById('tiktokTagsBadge');
       if (tkBadge) tkBadge.textContent = `${seo.tagCount}/5 HASHTAGS ✅`;
 
-      // 2. Populate YouTube Shorts Box (<=100 Letters)
+      // 2. Populate YouTube Shorts Box (3 Options <=100 Letters)
       const ytDisplay = document.getElementById('videoTitleDisplay');
       if (ytDisplay) ytDisplay.textContent = seo.youtubeShortText;
       const ytBadge = document.getElementById('ytCharCountBadge');
       if (ytBadge) ytBadge.textContent = `${seo.youtubeShortText.length}/100 LETRAS ✅`;
+
+      const optsBox = document.getElementById('shortOptions100Container');
+      if (optsBox && Array.isArray(seo.shortOptions100)) {
+        optsBox.innerHTML = seo.shortOptions100.map((opt, idx) => `
+          <div style="background:rgba(0,0,0,0.45); border:1px solid rgba(255,107,129,0.32); border-radius:10px; padding:9px 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:0.72rem; color:#ff8fa3; font-weight:800;">${opt.label} • <strong style="color:#00e676;">${opt.text.length}/100 letras</strong></span>
+              <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:0.7rem; border-color:#ff6b81; color:#fff; font-weight:800;" onclick="copyShortOption(${idx})">📋 Copiar</button>
+            </div>
+            <div style="color:#fff; font-size:0.84rem; font-weight:700; line-height:1.35;">${escapeHtmlAttr(opt.text)}</div>
+          </div>
+        `).join('');
+      }
 
       // 3. Populate Pinned Comment
       const pinnedEl = document.getElementById('videoPinnedDisplay');
