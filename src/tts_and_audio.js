@@ -234,20 +234,26 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
   const right = new Float32Array(totalSamples);
 
   const chordSets = {
-    dark: [138.59, 164.81, 207.65, 277.18],
-    epic: [146.83, 174.61, 220.00, 293.66],
-    trap: [130.81, 155.56, 196.00, 261.63],
-    ambient: [164.81, 196.00, 246.94, 329.63]
+    // 🔴 DANGER (Oppenheimer / Chernobyl D-Minor Phrygian Tension)
+    danger: { freqs: [146.83, 155.56, 220.00, 293.66], bpm: 144, lfoHz: 0.45, subGain: 0.40, arpMult: 2.0 },
+    // 🔵 COSMIC (Interstellar C# Minor 9th Deep Space / Ocean Abyss)
+    cosmic: { freqs: [138.59, 164.81, 207.65, 311.13], bpm: 126, lfoHz: 0.22, subGain: 0.34, arpMult: 2.0 },
+    // 🟢 EMERALD (BBC Planet Earth F-Minor / Lydian Organic Wonder)
+    emerald: { freqs: [174.61, 207.65, 261.63, 349.23], bpm: 120, lfoHz: 0.28, subGain: 0.30, arpMult: 3.0 },
+    // 🟡 GOLD (Ancient History / Archaeological E-Harmonic Minor Mystery)
+    gold: { freqs: [164.81, 196.00, 246.94, 311.13], bpm: 128, lfoHz: 0.30, subGain: 0.34, arpMult: 2.0 },
+    dark: { freqs: [138.59, 164.81, 207.65, 277.18], bpm: 132, lfoHz: 0.25, subGain: 0.34, arpMult: 2.0 }
   };
 
-  const freqs = chordSets[mood] || chordSets.dark;
+  const preset = chordSets[mood] || chordSets.cosmic;
+  const freqs = preset.freqs;
   const subFreq = freqs[0] / 4;
-  const beatDur = 60 / 132;
+  const beatDur = 60 / preset.bpm;
 
   for (let i = 0; i < totalSamples; i++) {
     const t = i / sampleRate;
 
-    const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.25 * t);
+    const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * preset.lfoHz * t);
     let pad = 0;
     for (let k = 0; k < freqs.length; k++) {
       pad += Math.sin(2 * Math.PI * freqs[k] * t + Math.sin(t * (k + 1))) * 0.16;
@@ -255,12 +261,12 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
 
     const beatPos = (t % (beatDur * 2)) / (beatDur * 2);
     const subEnv = Math.exp(-beatPos * 4.5);
-    const sub = Math.tanh(Math.sin(2 * Math.PI * subFreq * t) * 2.0) * subEnv * 0.34;
+    const sub = Math.tanh(Math.sin(2 * Math.PI * subFreq * t) * 2.0) * subEnv * preset.subGain;
 
     const arpIdx = Math.floor(t / (beatDur / 2)) % freqs.length;
     const arpPos = (t % (beatDur / 2)) / (beatDur / 2);
     const arpEnv = Math.exp(-arpPos * 7.0);
-    const arp = Math.sin(2 * Math.PI * (freqs[arpIdx] * 2) * t) * arpEnv * 0.10;
+    const arp = Math.sin(2 * Math.PI * (freqs[arpIdx] * preset.arpMult) * t) * arpEnv * 0.11;
 
     let masterEnv = 1.0;
     if (t < 0.25) masterEnv = t / 0.25;
