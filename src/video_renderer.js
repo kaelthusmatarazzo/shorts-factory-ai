@@ -322,6 +322,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     } catch (e) {}
   }
 
+  const enTitle = enTitleClean || enTitleFull;
   console.log(`📸 [Studio 2.0 Dual-Shot Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais verificadas!`);
 
   // 3. Assign TWO distinct photo queues (shotAQueue for 0-50%, shotBQueue for 50-100%) to every scene!
