@@ -357,6 +357,14 @@
       </div>
 
       <div class="field custom-topic">
+        <label>Estilo Visual & Edição (Studio 2.0)</label>
+        <select id="visualStyleSelect">
+          <option value="cinema" selected>🎬 Studio 2.0: Cinema Full-Screen 9:16 + 14 Fotos + Pílula Neon + Dados Reais</option>
+          <option value="card">🖼️ Card Clássico: Moldura Central + Fundo Blur + 14 Cortes</option>
+        </select>
+      </div>
+
+      <div class="field custom-topic">
         <label>Formato & Monetização</label>
         <select id="durationSelect">
           <option value="monetized" selected>💰 TikTok Monetizado (>1 Minuto • 63s-75s + 🔁 Loop Infinito)</option>
@@ -366,7 +374,7 @@
 
       <div class="field custom-topic">
         <label>Tema Opcional (deixe vazio para descobrir temas inéditos)</label>
-        <input id="customTopicInput" type="text" placeholder="Ex: Buracos Negros, Ilha da Queimada Grande..." />
+        <input id="customTopicInput" type="text" placeholder="Ex: Fossa das Marianas, Buraco Superprofundo de Kola..." />
       </div>
 
       <!-- Progress Indicator -->
@@ -842,6 +850,8 @@
       const statusBox = document.getElementById('statusBox');
       const niche = document.getElementById('nicheSelect').value;
       const voice = document.getElementById('voiceSelect').value;
+      const visualStyleEl = document.getElementById('visualStyleSelect');
+      const visualStyle = visualStyleEl ? visualStyleEl.value : 'cinema';
       const durationMode = document.getElementById('durationSelect').value;
       const customTopic = document.getElementById('customTopicInput').value;
 
@@ -849,7 +859,7 @@
 
       btn.disabled = true;
       statusBox.style.display = 'block';
-      updateProgress(12, usePreviewedScript ? 'Gravando seu roteiro editado em paralelo (Voz Thalita 👩🎙️)...' : 'Gerando 7 cenas em paralelo (Voz Thalita 👩🎙️ + 7 Fotos Reais)...');
+      updateProgress(12, usePreviewedScript ? 'Gravando seu roteiro Studio 2.0 (Voz Thalita 👩🎙️ + Pílula Neon)...' : 'Studio 2.0: Buscando 14 fotos reais + Voz Thalita Emocional 👩🎙️...');
 
       // Smooth progress ticker for synchronous Vercel Serverless execution
       let simPct = 14;
@@ -857,10 +867,10 @@
         if (simPct < 92) {
           simPct += 4;
           const msgs = [
-            'Baixando 7 fotos reais únicas da Wikipédia em paralelo...',
-            'Gravando voz feminina Thalita Multilingual Neural (WordBoundary)...',
-            'Renderizando quadros HD com Loop Infinito 🔁...',
-            'Mixando efeitos sonoros + corte acústico sem pausa (FFmpeg)...'
+            'Baixando 14 fotos reais verificadas (Shot A + Shot B) em lote único...',
+            'Gravando voz Thalita Neural com curva de emoção por cena (WordBoundary)...',
+            'Renderizando Cinema Full-Screen 9:16 + Karaokê Pílula Neon + Dados Reais...',
+            'Mixando Sound Design 14 Cortes (Sub-Bass + Whooshes) + Loop Infinito 🔁...'
           ];
           updateProgress(simPct, msgs[Math.min(3, Math.floor((simPct - 14) / 20))]);
         }
@@ -870,6 +880,7 @@
         const payload = {
           niche,
           voice,
+          visualStyle,
           durationMode,
           customTopic,
           scriptOverride: editedScript,
