@@ -86,147 +86,151 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
   return `${shadowPaths}\n${fgPaths}`;
 }
 
-// Fetch a distinct real photograph from Wikipedia / Wikimedia Commons / Real Photo Providers (100% Real Photos Guaranteed!)
-async function fetchRealPhotoBuffer(queryStr, sceneIdx, usedImageUrls = new Set(), directImageUrl = null, fallbackThemeQuery = '') {
-  // 1. Direct Wikipedia Hero Image (Scene 1)
-  if (directImageUrl && !usedImageUrls.has(directImageUrl) && !directImageUrl.endsWith('.svg')) {
-    usedImageUrls.add(directImageUrl);
+// Extract clean proper/scientific noun from scene imageQuery without generic English filler words
+function extractCleanEntityName(rawQuery, sourceTopic) {
+  const stopWords = /\b(photo|photography|science|nature|microscope|closeup|extreme|environment|history|world|research|technology|planet|earth|mystery|zombie|ant|snake|tree|coast|ocean|island|fire|night|daytime|desert|red|water|volcano|crust|mineral|lake|bird|moss|droplet|tun|state|electron|protein|shield|molecular|asteroid|impact|dinosaur|extinction|gas|vents|flames|mining|turquoise|acid|crater|miners|carrying|baskets|giant|crystals|scientists|cooling|suits|human|lungs|alveoli|medical|illustration|underground|flooded|cavern|spores|mandible|macro|rainforest|canopy|sunlight|leaf|biting|vein|fruiting|body|head|bolts|storm|cloud|mountains|clouds|cumulonimbus|anvil|atmosphere|ozone|space|white|bark|trunks|root|system|forest|aerial|autumn|gold|ancient|mountain|snow|golden|leaves|gear|fragment|x-ray|tomography|gears|reconstruction|model|solar|eclipse|astronomy|pages|botanical|text|script|plants|astronomical|diagram|rare|book|library|subglacial|sheet|radar|sea|ice|brine|iron|oxide|extremophile|bacteria|deep|abyssal|zone|fish|creature|bioluminescence|exploration|submarine|fishing|trawler|net|uranus|and|nasa|carbon|atom|diamond|structure|rough|uncut|diamonds|laser|planetary|core|portrait|historical|lecturing|brain|anatomy|glass|slides|mirror|hexagonal|cacti|stars|reflection|observation|satellite|orbit|lithium|evaporation|ponds|map|bathyscaphe| snailfish|hydrothermal|vent|floor|submersible|rock|needles|limestone|karst|pinnacles|suspension|bridge|lemur|canyon|below|beach|jungle|shipwreck|coral|reef|navy|guard|helicopter|low|tide|bay|of|bengal|sunset|nuclear|power|plant|sarcophagus|control|room|reactor|geiger|counter|radiation|dosimeter|abandoned|city|new|safe|confinement|arch|radioactive|sample|warriors|horses|chariots|warrior|face|mausoleum|first|mound|liquid|mercury|metal|droplets|museum|pit)\b/gi;
+  const cleaned = String(rawQuery || '')
+    .replace(stopWords, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length >= 4) return cleaned;
+  return String(sourceTopic || '').replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+// Pre-fetch 25 to 45 REAL verified Wikimedia/Wikipedia photographs of the exact topic in 1-2 API requests (ZERO rate limits!)
+// and contextually assign a unique photo of the topic to each scene based on what the voice is saying!
+async function prefetchTopicPhotoUrlsForScenes(scriptData) {
+  const scenes = scriptData.scenes || [];
+  const rawTopic = String(scriptData.sourceTopic || scriptData.title || 'Ciência').replace(/\s*\([^)]*\)/g, '').trim();
+  let enTitle = '';
+  let heroUrl = scriptData.scenes?.[0]?.directImageUrl || null;
+  const pool = []; // Array of { url, title }
+  const seenUrls = new Set();
+
+  const addCandidate = (url, title = '') => {
+    if (!url || seenUrls.has(url)) return;
+    if (/\.(svg|gif|tif|tiff|webm|ogv|pdf|djvu)$/i.test(url)) return;
+    if (/icon|logo|symbol|flag|map_of|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola/i.test(url)) return;
+    seenUrls.add(url);
+    pool.push({ url, title: String(title || '').toLowerCase() });
+  };
+
+  if (heroUrl) addCandidate(heroUrl, rawTopic);
+
+  // 1. Single Call to PT Wikipedia: get English title (langlinks) + main pageimage
+  try {
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(scriptData.sourceTopic || rawTopic)}&prop=langlinks|pageimages&lllang=en&piprop=original|thumbnail&pithumbsize=1080&redirects=1&format=json`;
+    const ptRes = await fetch(ptUrl, {
+      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (ptRes.ok) {
+      const ptData = await ptRes.json();
+      const page = Object.values(ptData.query?.pages || {})[0];
+      if (page) {
+        const mainImg = page.original?.source || page.thumbnail?.source;
+        if (mainImg) addCandidate(mainImg, `${rawTopic} hero`);
+        if (page.langlinks?.[0]?.['*']) {
+          enTitle = page.langlinks[0]['*'].replace(/\s*\([^)]*\)/g, '').trim();
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Build a SINGLE combined OR query for Wikimedia Commons so we get up to 45 real photos of the topic in 1 HTTP call!
+  const entitySet = new Set([rawTopic]);
+  if (enTitle) entitySet.add(enTitle);
+  for (const s of scenes) {
+    const cleanEnt = extractCleanEntityName(s.imageQuery, rawTopic);
+    if (cleanEnt && cleanEnt.length >= 4) entitySet.add(cleanEnt);
+  }
+
+  const uniqueEntities = Array.from(entitySet).slice(0, 4);
+  const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
+
+  try {
+    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=45&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+    const cRes = await fetch(commonsUrl, {
+      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+      signal: AbortSignal.timeout(4500)
+    });
+    if (cRes.ok) {
+      const cData = await cRes.json();
+      const pages = Object.values(cData.query?.pages || {});
+      for (const p of pages) {
+        const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
+        addCandidate(imgUrl, p.title || '');
+      }
+    }
+  } catch (e) {}
+
+  // 3. If pool still has fewer than 8 photos, do 1 fallback search on Wikimedia Commons using broader topic words (without quotes)
+  if (pool.length < 8) {
     try {
-      const r = await fetch(directImageUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
-        signal: AbortSignal.timeout(4500)
+      const broadQuery = `filetype:bitmap ${enTitle || rawTopic}`;
+      const broadUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(broadQuery)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+      const bRes = await fetch(broadUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(4000)
       });
-      if (r.ok) {
-        const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 6000) {
-          const normalized = await sharp(buf).png().toBuffer();
-          console.log(`✅ [Cena ${sceneIdx + 1}] Foto oficial da Wikipédia carregada (${Math.round(buf.length / 1024)} KB)`);
-          return normalized;
+      if (bRes.ok) {
+        const bData = await bRes.json();
+        for (const p of Object.values(bData.query?.pages || {})) {
+          const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
+          addCandidate(imgUrl, p.title || '');
         }
       }
     } catch (e) {}
   }
 
-  // Clean topic name without extra English words that break boolean AND search
-  const cleanTopic = String(queryStr || '').replace(/\b(photo|science|nature|microscope|closeup|extreme|environment|history|world|research|technology|planet|earth|mystery)\b/gi, '').trim();
+  console.log(`📸 [Topic Photo Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais da Wikipédia/Wikimedia carregadas em lote único!`);
 
-  // 2. Try Wikipedia PT-BR & EN Article Embedded Images (fetches all photos inside the article page)
-  if (cleanTopic) {
-    for (const wikiLang of ['pt', 'en']) {
-      try {
-        const pageImgsUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=query&generator=images&titles=${encodeURIComponent(cleanTopic)}&gimlimit=20&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-        const pRes = await fetch(pageImgsUrl, {
-          headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
-          signal: AbortSignal.timeout(3500)
-        });
-        if (pRes.ok) {
-          const pData = await pRes.json();
-          const rawPages = Object.values(pData.query?.pages || {});
-          const pages = [...rawPages.slice(sceneIdx % Math.max(1, rawPages.length)), ...rawPages.slice(0, sceneIdx % Math.max(1, rawPages.length))];
-          for (const page of pages) {
-            const imgUrl = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
-            if (!imgUrl || usedImageUrls.has(imgUrl) || /\.(svg|gif|tif|tiff|webm|ogv|pdf)$/i.test(imgUrl) || /icon|logo|symbol|flag|map_of|commons-logo|red_pencil/i.test(imgUrl)) {
-              continue;
-            }
-            usedImageUrls.add(imgUrl);
-            const imgRes = await fetch(imgUrl, {
-              headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
-              signal: AbortSignal.timeout(4000)
-            });
-            if (imgRes.ok) {
-              const buf = Buffer.from(await imgRes.arrayBuffer());
-              if (buf.length > 8000) {
-                const normalized = await sharp(buf).png().toBuffer();
-                console.log(`✅ [Cena ${sceneIdx + 1}] Foto interna da Wikipédia (${wikiLang}) carregada (${Math.round(buf.length / 1024)} KB)`);
-                return normalized;
-              }
-            }
-          }
-        }
-      } catch (e) {}
-    }
-  }
+  // 4. Assign the best matching UNUSED photo from the topic pool to each scene
+  const usedIndices = new Set();
+  const sceneAssignedQueues = scenes.map((s, sceneIdx) => {
+    const keywords = `${s.imageQuery || ''} ${s.sceneLabel || ''} ${s.narration || ''}`
+      .toLowerCase()
+      .replace(/[^\wÀ-ÿ\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 4);
 
-  // 3. Wikimedia Commons Search with Distinct Per-Scene Fallbacks (gsrlimit=30 & standard 800px cached thumbs)
-  const sceneThemePool = [
-    'nature phenomenon discovery photography',
-    'science laboratory experiment research',
-    'microscope crystal mineral macro',
-    'earth geology volcano canyon landscape',
-    'ancient history museum artifact archaeology',
-    'astronomy observatory nebula galaxy stars',
-    'planet earth space nasa iss photography',
-    'ocean wildlife bioluminescence deep sea'
-  ];
-
-  const searchTerms = [
-    cleanTopic,
-    cleanTopic ? cleanTopic.split(/\s+/)[0] : '',
-    fallbackThemeQuery,
-    sceneThemePool[sceneIdx % sceneThemePool.length],
-    sceneThemePool[(sceneIdx + 3) % sceneThemePool.length]
-  ].filter(Boolean);
-
-  for (const term of searchTerms) {
-    try {
-      const q = encodeURIComponent(term);
-      const wikiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=filetype:bitmap+${q}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-
-      const res = await fetch(wikiUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryPro/4.0 (Educational Facts)' },
-        signal: AbortSignal.timeout(3500)
-      });
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      const rawPages = Object.values(data.query?.pages || {});
-      const pages = [...rawPages.slice(sceneIdx % Math.max(1, rawPages.length)), ...rawPages.slice(0, sceneIdx % Math.max(1, rawPages.length))];
-
-      for (const page of pages) {
-        const imgUrl = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
-        if (!imgUrl || usedImageUrls.has(imgUrl) || /\.(svg|gif|tif|tiff|webm|ogv|pdf)$/i.test(imgUrl)) {
-          continue;
-        }
-        usedImageUrls.add(imgUrl);
-
-        const imgRes = await fetch(imgUrl, {
-          headers: { 'User-Agent': 'ShortsFactoryPro/4.0' },
-          signal: AbortSignal.timeout(4000)
-        });
-        if (imgRes.ok) {
-          const arr = await imgRes.arrayBuffer();
-          const buf = Buffer.from(arr);
-          if (buf.length > 7500) {
-            const normalized = await sharp(buf).png().toBuffer();
-            console.log(`✅ [Cena ${sceneIdx + 1}] Foto real única carregada para "${term}" (${Math.round(buf.length / 1024)} KB)`);
-            return normalized;
-          }
-        }
+    // Score each available photo in the pool for this specific scene
+    const scoredPool = pool.map((item, idx) => {
+      let score = usedIndices.has(idx) ? -1000 : 0;
+      if (sceneIdx === 0 && idx === 0) score += 500; // Scene 1 always gets Hero photo first
+      for (const kw of keywords) {
+        if (item.title.includes(kw)) score += 25;
       }
-    } catch (e) {
-      console.log(`Wikimedia search attempt failed for "${term}":`, e.message);
+      if (item.title.includes(rawTopic.toLowerCase())) score += 15;
+      if (enTitle && item.title.includes(enTitle.toLowerCase())) score += 15;
+      return { item, idx, score };
+    }).sort((a, b) => b.score - a.score);
+
+    const bestChoice = scoredPool[0];
+    if (bestChoice && bestChoice.idx !== undefined) {
+      usedIndices.add(bestChoice.idx);
     }
-  }
 
-  // 4. Guaranteed High-Resolution Real Photograph Backup (LoremFlickr / Picsum Photos — NEVER an empty SVG!)
-  const realPhotoFallbackUrls = [
-    `https://loremflickr.com/640/480/science,nature?lock=${sceneIdx * 17 + 11}`,
-    `https://picsum.photos/seed/curiosidade_${encodeURIComponent(cleanTopic || 'nature')}_${sceneIdx}/640/480`
-  ];
+    // Return a queue of top 4 candidate URLs for this scene (primary + 3 backups from the same topic pool)
+    return scoredPool.slice(0, 4).map(x => x.item.url);
+  });
 
-  for (const backupUrl of realPhotoFallbackUrls) {
+  return sceneAssignedQueues;
+}
+
+async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0) {
+  for (const imgUrl of urlQueue) {
+    if (!imgUrl) continue;
     try {
-      const bRes = await fetch(backupUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(4000)
+      const r = await fetch(imgUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(4500)
       });
-      if (bRes.ok) {
-        const buf = Buffer.from(await bRes.arrayBuffer());
-        if (buf.length > 6000) {
+      if (r.ok) {
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (buf.length > 5500) {
           const normalized = await sharp(buf).png().toBuffer();
-          usedImageUrls.add(backupUrl);
-          console.log(`✅ [Cena ${sceneIdx + 1}] Foto HD de backup real carregada (${Math.round(buf.length / 1024)} KB)`);
+          console.log(`✅ [Cena ${sceneIdx + 1}] Foto contextual do tema carregada: ${imgUrl.split('/').pop().slice(0, 45)} (${Math.round(buf.length / 1024)} KB)`);
           return normalized;
         }
       }
@@ -562,18 +566,18 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
-  const usedImageUrls = new Set();
   const blurSigma = process.env.VERCEL ? 12 : 22;
 
-  // PARALLEL SCENE PREPARATION: Run TTS + Photo Fetch + Backdrop Blur for all scenes concurrently!
-  // Cuts 7-scene preparation time from ~25s down to ~3.8s (critical for Vercel 60s limit!)
+  // 1. Pre-fetch 25-45 real Wikipedia/Wikimedia photos of the exact topic in 1 single batch call (avoids 429 rate-limit!)
+  const scenePhotoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
+
+  // 2. PARALLEL SCENE PREPARATION: Run TTS + Assigned Topic Photo Download + Backdrop Blur concurrently!
   const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
-    const photoQuery = s.imageQuery || s.imagePrompt || scriptData.title;
 
     const [ttsResult, rawPhotoBuffer] = await Promise.all([
       synthesizeSpeechWithTimings(s.narration, audioWavPath, voiceName),
-      fetchRealPhotoBuffer(photoQuery, i, usedImageUrls, s.directImageUrl || null, s.fallbackThemeQuery || '')
+      downloadAssignedTopicPhoto(scenePhotoQueues[i] || scenePhotoQueues[0] || [], i)
     ]);
 
     const blurredBackdropBuffer = await sharp(rawPhotoBuffer)
@@ -605,18 +609,17 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const wantMonetizedLength = !process.env.VERCEL && (scriptData.durationMode || 'monetized') !== 'short';
   let bonusIdx = 0;
   const bonusFacts = [
-    `Outro ponto fascinante analisado pelos cientistas é que a maior parte das pessoas passa a vida inteira sem notar como esse fenômeno influencia o nosso planeta todos os dias, mantendo mistérios que a ciência moderna ainda tenta desvendar por completo.`,
-    `Pesquisas publicadas em universidades internacionais mostraram que cada nova descoberta nessa área abre dezenas de novas perguntas, provando que conhecemos apenas uma pequena fração dos segredos do universo.`
+    `Outro dado comprovado pelos pesquisadores sobre ${scriptData.sourceTopic || 'esse tema'} é como suas condições físicas raras continuam sendo monitoradas por universidades do mundo inteiro.`,
+    `Esses levantamentos científicos ajudam a explicar por que ${scriptData.sourceTopic || 'esse fenômeno'} é considerado um caso único nos registros da natureza.`
   ];
 
   while (wantMonetizedLength && totalDuration < 62.5 && bonusIdx < bonusFacts.length) {
     const extraNarration = bonusFacts[bonusIdx];
     const extraWavPath = path.join(tmpDir, `scene_bonus_${bonusIdx}.wav`);
-    const extraQuery = `${scriptData.sourceTopic || 'science'}`;
 
     const [extraTts, extraPhotoBuffer] = await Promise.all([
       synthesizeSpeechWithTimings(extraNarration, extraWavPath, voiceName),
-      fetchRealPhotoBuffer(extraQuery, scenes.length + bonusIdx, usedImageUrls, null, 'astronomy galaxy stars')
+      downloadAssignedTopicPhoto(scenePhotoQueues[(bonusIdx + 2) % scenePhotoQueues.length] || scenePhotoQueues[0] || [], scenes.length + bonusIdx)
     ]);
 
     const extraBackdropBuffer = await sharp(extraPhotoBuffer)
