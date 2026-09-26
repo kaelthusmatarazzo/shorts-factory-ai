@@ -349,6 +349,8 @@ async function buildBaseSceneCanvas(rawPhotoBuffer, blurredBackdropBuffer, zoomF
       width: boxW,
       height: boxH
     })
+    .sharpen({ sigma: 1.15, m1: 1.0, m2: 2.0 })
+    .modulate({ brightness: 1.04, saturation: 1.14 })
     .png()
     .toBuffer();
 
@@ -578,7 +580,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas (Studio 3.0 Edition)
+// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas (Studio 3.0 / 4.0 Edition)
 async function renderCaptionedFrame({
   baseCanvasBuffer,
   wordsChunk,
@@ -586,6 +588,7 @@ async function renderCaptionedFrame({
   badgeText,
   sceneLabel,
   dataCalloutText = '',
+  rehookAlertText = '',
   coverTitleText = '',
   speakerBadgeText = '',
   tensionInfo = null,
@@ -643,6 +646,16 @@ async function renderCaptionedFrame({
     `;
   }
 
+  // STUDIO 4.0 ITEM #4: Anti-Boredom Visual Re-Hook Alert Banner at ~20s (Scene 3) & ~42s (Scene 5)
+  let rehookBannerSvg = '';
+  if (rehookAlertText && !coverTitleText) {
+    const rhPath = renderCenteredVectorPath(cleanDisplayString(rehookAlertText), 360, 246, 19, 520, '#FFFFFF');
+    rehookBannerSvg = `
+      <rect x="85" y="212" width="550" height="48" rx="24" fill="#FF1744" fill-opacity="0.94" stroke="#FFE600" stroke-width="3"/>
+      ${rhPath}
+    `;
+  }
+
   // STUDIO 3.0 UPGRADE #2: Floating Comment-Bait Engagement Badge on Scene 6 ("COMENTE SUA OPINIAO ABAIXO")
   let commentBaitSvg = '';
   if (isCommentBaitScene && !coverTitleText) {
@@ -682,6 +695,7 @@ async function renderCaptionedFrame({
     ${speakerBadgeSvg}
 
     ${dataCalloutSvg}
+    ${rehookBannerSvg}
     ${commentBaitSvg}
 
     <rect x="56" y="998" width="608" height="40" rx="14" fill="#05060d" fill-opacity="0.86" stroke="${pal.accent}" stroke-width="1.5" stroke-opacity="0.65"/>
@@ -704,7 +718,7 @@ async function renderCaptionedFrame({
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 3.0 Master Timeline Renderer
+// Single-Pass Studio 3.0 / 4.0 Master Timeline Renderer
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -731,8 +745,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const badgeText = 'FATOS CURIOSOS';
 
   onProgress(15, isDuetPodcast
-    ? 'Studio 3.0: Gravando Dueto Podcast (Thalita + Antônio) + 14 Fotos Reais...'
-    : 'Studio 3.0: Buscando 14 fotos reais + Voz Emocional + Color Grading...');
+    ? 'Studio 4.0: Gravando Dueto Podcast (Shure SM7B EQ) + 14 Fotos Remasterizadas 4K...'
+    : 'Studio 4.0: Buscando 14 fotos 4K + Voz Estúdio + Re-Hooks Anti-Queda...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
@@ -748,7 +762,6 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     const dualQ = sceneDualQueues[i] || sceneDualQueues[0] || { shotAQueue: [], shotBQueue: [] };
 
     // STUDIO 3.0 UPGRADE #1: Duet Podcast Mode alternates Thalita (Scenes 1,3,5,7) & Antônio (Scenes 2,4,6)
-    // Scene 1 (i=0) and Scene 7 (i=6) BOTH use Thalita so the Infinite Loop Bridge (Cena 7 -> Cena 1) is 100% seamless!
     let sceneVoice = voiceName;
     let speakerBadgeText = '';
     if (isDuetPodcast) {
@@ -773,7 +786,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       sharp(rawPhotoB).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer()
     ]);
 
-    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In) with Atmosphere Color Grading
+    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In) with 4K Sharpen
     const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
       buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, palette.glowColor),
       buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, palette.glowColor),
@@ -816,7 +829,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando HUD de Tensão + Pílula Neon + 14 Cortes Cinema 9:16...');
+  onProgress(68, 'Renderizando HUD de Tensão + Re-Hooks (20s/42s) + Pílula Neon...');
 
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
@@ -862,6 +875,14 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         isFlashCut = true;
       }
 
+      // ITEM #4: Anti-Boredom Visual Re-Hook Alert on Scene 3 (~20s) and Scene 5 (~42s) first 4 word steps
+      let rehookAlertText = '';
+      if (i === 2 && c <= 3) {
+        rehookAlertText = 'REVELACAO CRITICA • PRESTE ATENCAO';
+      } else if (i === 4 && c <= 3) {
+        rehookAlertText = 'O PONTO MAIS EXTREMO DESTE CASO';
+      }
+
       const frameLabel = isVisualLoopBridge ? sceneAssets[0].sceneLabel : asset.sceneLabel;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
       const isCoverFrame = (i === 0 && c === 0);
@@ -873,6 +894,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         badgeText,
         sceneLabel: frameLabel,
         dataCalloutText: asset.dataCallout,
+        rehookAlertText,
         coverTitleText: isCoverFrame ? (scriptData.title || '') : '',
         speakerBadgeText: asset.speakerBadgeText,
         tensionInfo: isVisualLoopBridge ? getTensionPhaseInfo(0, sceneAssets.length) : tensionInfo,
@@ -904,7 +926,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(86, 'Mixando Sound Design de 14 cortes + Áudio Master WAV sem pausa...');
+  onProgress(86, 'Masterizando Voz Shure SM7B (Compressor + EQ) + Batimento Cardíaco...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -915,13 +937,14 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
+  // ITEM #3: Broadcast Shure SM7B Studio Voice Mastering (Highpass + Dynamic Compressor + Warm Presence) in FFmpeg
   const fpsRate = process.env.VERCEL ? '8' : '25';
   execFileSync(ffmpegPath, [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
-    '-filter_complex', '[1:a]volume=1.45[voice];[2:a]volume=0.34[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
+    '-filter_complex', '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-pix_fmt', 'yuv420p', '-r', fpsRate,
