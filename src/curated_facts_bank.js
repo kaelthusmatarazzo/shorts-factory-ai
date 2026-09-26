@@ -1060,8 +1060,332 @@ const CURATED_DOCUMENTARY_FACTS = [
         sceneLabel: '6/7 • Mercúrio 100x Acima do Normal Confirmado'
       }
     ]
+  },
+  {
+    topic: 'Silabário Global de Sementes de Svalbard',
+    wikiSearch: 'Svalbard Global Seed Vault',
+    niche: 'curiosidades',
+    colorTheme: 'cosmic',
+    title: 'O Cofre do Fim do Mundo Escondido no Ártico ❄️',
+    loopStart: '...a mil e trezentos quilômetros do Polo Norte existe um búnquer indestrutível construído para salvar a humanidade do fim do mundo!',
+    loopEnd: 'Mas o motivo real de terem escolhido exatamente essa ilha congelada é o fato de que...',
+    scenes: [
+      {
+        narration: 'Escavado a cento e trinta metros de profundidade dentro de uma montanha de rocha sólida na ilha de Spitsbergen, na Noruega, fica o Cofre Global de Sementes de Svalbard, conhecido como o Cofre do Juízo Final.',
+        imageQuery: 'Svalbard Global Seed Vault entrance snow',
+        fallbackThemeQuery: 'arctic bunker snow mountain norway',
+        sceneLabel: '1/7 • Cofre do Juízo Final (Svalbard)'
+      },
+      {
+        narration: 'Inaugurado em 2008 pelo governo norueguês a um custo de nove milhões de dólares, o túnel blindado foi projetado para resistir a guerras nucleares, queda de asteroides e terremotos de alta magnitude.',
+        imageQuery: 'Svalbard Seed Vault tunnel interior',
+        fallbackThemeQuery: 'underground concrete tunnel vault',
+        sceneLabel: '2/7 • Blindagem Contra Guerra Nuclear'
+      },
+      {
+        narration: 'Lá dentro, três câmaras subterrâneas são mantidas a dezoito graus negativos, guardando mais de um milhão e duzentas mil amostras de sementes de quase todos os países do planeta Terra.',
+        imageQuery: 'Seed vault shelves boxes storage',
+        fallbackThemeQuery: 'laboratory cold storage shelves',
+        sceneLabel: '3/7 • 1,2 Milhão de Sementes a -18 °C'
+      },
+      {
+        narration: 'Mesmo que todas as usinas elétricas do planeta parem de funcionar, o permafrost — o gelo permanente da montanha ártica — garante que as sementes continuem congeladas e vivas por até dois mil anos.',
+        imageQuery: 'Spitsbergen arctic permafrost glacier',
+        fallbackThemeQuery: 'arctic glacier ice mountain',
+        sceneLabel: '4/7 • Gelo Natural por 2.000 Anos'
+      },
+      {
+        narration: 'Em 2015, o cofre precisou ser aberto pela primeira vez na história quando a Guerra da Síria destruiu o banco agrícola de Aleppo, permitindo replantar trinta e oito mil espécies de trigo e cevada do Oriente Médio.',
+        imageQuery: 'Wheat seeds agriculture laboratory',
+        fallbackThemeQuery: 'grain seeds laboratory scientist',
+        sceneLabel: '5/7 • A Primeira Abertura Histórica (2015)'
+      },
+      {
+        narration: 'A entrada fica a cento e trinta metros acima do nível do mar, calculada exatamente para que a água nunca alcance as portas mesmo que todo o gelo da Groenlândia e da Antártida derreta. E você, o que guardaria nesse cofre?',
+        imageQuery: 'Svalbard Global Seed Vault night aurora',
+        fallbackThemeQuery: 'arctic aurora borealis snow building',
+        sceneLabel: '6/7 • 130m Acima de Qualquer Inundação'
+      }
+    ]
+  },
+  {
+    topic: 'Ponto Nemo',
+    wikiSearch: 'Point Nemo',
+    niche: 'curiosidades',
+    colorTheme: 'cosmic',
+    title: 'O Lugar Mais Solitário do Planeta Terra 🌊',
+    loopStart: '...existe uma coordenada exata no meio do Oceano Pacífico onde os seres humanos mais próximos de você estão no espaço sideral!',
+    loopEnd: 'E as agências espaciais usam essa região secreta justamente porque...',
+    scenes: [
+      {
+        narration: 'Batizado de Ponto Nemo em homenagem ao Capitão Nemo de Júlio Verne, esse local no Pacífico Sul é o polo oceânico de inacessibilidade: o ponto mais distante de qualquer terra firme em todo o nosso planeta.',
+        imageQuery: 'Point Nemo Pacific Ocean map',
+        fallbackThemeQuery: 'deep blue pacific ocean waves aerial',
+        sceneLabel: '1/7 • Ponto Nemo (Pacífico Sul)'
+      },
+      {
+        narration: 'Se um navio parar nessa coordenada exata, a faixa de areia mais próxima fica a dois mil seiscentos e oitenta e oito quilômetros de distância, nas pequenas ilhas desabitadas de Ducie e Maher.',
+        imageQuery: 'South Pacific Ocean remote island',
+        fallbackThemeQuery: 'isolated ocean horizon storm',
+        sceneLabel: '2/7 • 2.688 Km Longe de Qualquer Terra'
+      },
+      {
+        narration: 'Como a Estação Espacial Internacional orbita a Terra a quatrocentos e quinze quilômetros de altitude, quando ela passa sobre o Ponto Nemo, os astronautas no espaço estão seis vezes mais perto de lá do que qualquer pessoa na Terra.',
+        imageQuery: 'International Space Station orbit earth',
+        fallbackThemeQuery: 'space station above blue ocean earth',
+        sceneLabel: '3/7 • Astronautas a 415 Km Mais Próximos'
+      },
+      {
+        narration: 'A região fica presa dentro do Giro do Pacífico Sul, uma corrente rotatória gigante que bloqueia a entrada de águas ricas em nutrientes, tornando o fundo de quatro mil metros um verdadeiro deserto biológico.',
+        imageQuery: 'Ocean gyre currents satellite',
+        fallbackThemeQuery: 'deep dark ocean abyssal water',
+        sceneLabel: '4/7 • O Deserto Biológico a 4.000 Metros'
+      },
+      {
+        narration: 'Por não ter rotas de navios nem aviões comerciais num raio de milhares de quilômetros, a NASA e a agência espacial russa transformaram o Ponto Nemo no Cemitério Oficial de Espaçonaves da humanidade.',
+        imageQuery: 'Spacecraft atmospheric reentry burn',
+        fallbackThemeQuery: 'satellite burning atmosphere night',
+        sceneLabel: '5/7 • O Cemitério de Espaçonaves da NASA'
+      },
+      {
+        narration: 'Desde 1971, mais de duzentos e sessenta satélites, foguetes e até a estação espacial russa Mir de cento e vinte toneladas foram derrubados no fundo desse abismo. Você teria coragem de navegar até lá? Comente abaixo!',
+        imageQuery: 'Mir space station orbit',
+        fallbackThemeQuery: 'space station wreckage ocean',
+        sceneLabel: '6/7 • 260 Espaçonaves no Fundo do Mar'
+      }
+    ]
+  },
+  {
+    topic: 'Cidade subterrânea de Derinkuyu',
+    wikiSearch: 'Derinkuyu underground city',
+    niche: 'historia',
+    colorTheme: 'gold',
+    title: 'O Homem Que Derrubou uma Parede e Achou uma Cidade de 18 Andares 🏛️',
+    loopStart: '...em 1963, um morador da Turquia derrubou a parede do próprio porão com uma marreta e descobriu uma metrópole subterrânea de dezoito andares!',
+    loopEnd: 'Mas o mistério de como vinte mil pessoas respiravam lá embaixo se explica quando você vê que...',
+    scenes: [
+      {
+        narration: 'Na região da Capadócia, na Turquia, um homem tentava entender por que suas galinhas sumiam por uma fresta no porão. Ao quebrar a parede de pedra, ele encontrou um corredor escuro que descia para o fundo da Terra.',
+        imageQuery: 'Derinkuyu underground city tunnel',
+        fallbackThemeQuery: 'ancient underground rock tunnel turkey',
+        sceneLabel: '1/7 • A Descoberta Acidental em 1963'
+      },
+      {
+        narration: 'Arqueólogos descobriram que aquele corredor era a entrada de Derinkuyu, a maior cidade subterrânea escavada à mão do mundo, descendo a oitenta e cinco metros de profundidade — o equivalente a um prédio de dezoito andares.',
+        imageQuery: 'Derinkuyu underground city cross section',
+        fallbackThemeQuery: 'cappadocia underground cave chambers',
+        sceneLabel: '2/7 • 85 Metros e 18 Andares no Subsolo'
+      },
+      {
+        narration: 'Esculpida na rocha vulcânica macia há mais de dois mil e oitocentos anos, a fortaleza possuía estábulos para animais, adegas de vinho, escolas, capelas e espaço suficiente para esconder vinte mil moradores de uma só vez.',
+        imageQuery: 'Cappadocia underground cave room',
+        fallbackThemeQuery: 'carved stone chamber ancient history',
+        sceneLabel: '3/7 • Abrigo Completo para 20.000 Pessoas'
+      },
+      {
+        narration: 'Para impedir a entrada de exércitos invasores, cada andar era protegido por rodas maciças de pedra de meia tonelada que só podiam ser roladas e travadas pelo lado de dentro dos túneis.',
+        imageQuery: 'Derinkuyu stone rolling door',
+        fallbackThemeQuery: 'round stone door underground cave',
+        sceneLabel: '4/7 • Portas de Pedra de 500 Quilos'
+      },
+      {
+        narration: 'A engenharia mais impressionante era o sistema de suporte à vida: mais de cinquenta dutos verticais de ventilação levavam ar fresco até o décimo oitavo andar, além de um rio subterrâneo protegido contra envenenamento.',
+        imageQuery: 'Derinkuyu ventilation shaft well',
+        fallbackThemeQuery: 'deep stone well shaft ancient',
+        sceneLabel: '5/7 • 50 Poços de Ar a 85m de Profundidade'
+      },
+      {
+        narration: 'Estima-se que apenas dez por cento de Derinkuyu foi aberta aos visitantes, e túneis de oito quilômetros ligam essa cidade a outras duzentas cidades subterrâneas na Turquia. Você moraria lá embaixo? Comente aqui!',
+        imageQuery: 'Cappadocia rock formations Turkey',
+        fallbackThemeQuery: 'cappadocia landscape ancient turkey',
+        sceneLabel: '6/7 • Túneis de 8 Km Entre 200 Cidades'
+      }
+    ]
+  },
+  {
+    topic: 'Caverna de Son Doong',
+    wikiSearch: 'Hang Sơn Đoòng',
+    niche: 'curiosidades',
+    colorTheme: 'emerald',
+    title: 'A Caverna Tão Gigante Que Tem Sua Própria Floresta e Nuvens 🌿',
+    loopStart: '...escondida na selva do Vietnã existe uma caverna subterrânea tão colossal que possui suas próprias nuvens de chuva e uma floresta inteira lá dentro!',
+    loopEnd: 'E o motivo de ela ter ficado invisível para a ciência até 2009 é o fato de que...',
+    scenes: [
+      {
+        narration: 'Localizada no Parque Nacional de Phong Nha-Ke Bang, no Vietnã, a Caverna de Son Doong é a maior passagem subterrânea já descoberta no planeta Terra, com mais de nove quilômetros de extensão.',
+        imageQuery: 'Hang Son Doong cave Vietnam jungle',
+        fallbackThemeQuery: 'giant cave jungle entrance sunlight',
+        sceneLabel: '1/7 • Hang Son Doong (Vietnã)'
+      },
+      {
+        narration: 'O salão principal tem duzentos metros de altura e cento e cinquenta metros de largura: espaço suficiente para construir um quarteirão inteiro de Nova York com prédios de quarenta andares ou voar com um Boeing 747 lá dentro.',
+        imageQuery: 'Son Doong cave giant chamber',
+        fallbackThemeQuery: 'massive limestone cavern beam of light',
+        sceneLabel: '2/7 • 200 Metros de Altura (Cabem Prédios de 40 Andares)'
+      },
+      {
+        narration: 'Há cerca de quatrocentos mil anos, duas partes do teto de calcário desabaram, abrindo claraboias gigantescas por onde a luz do sol entra e alimenta uma selva subterrânea com árvores de trinta metros de altura.',
+        imageQuery: 'Son Doong doline rainforest cave',
+        fallbackThemeQuery: 'underground forest sinkhole sunlight',
+        sceneLabel: '3/7 • A Floresta Subterrânea com Árvores de 30m'
+      },
+      {
+        narration: 'Por causa da diferença extrema de temperatura entre o rio subterrâneo gelado e o ar tropical lá fora, o vapor de água sobe e forma nuvens reais de chuva que flutuam no teto da própria caverna.',
+        imageQuery: 'Cave mist clouds underground river',
+        fallbackThemeQuery: 'misty cavern underground river',
+        sceneLabel: '4/7 • Nuvens e Clima Próprio no Subsolo'
+      },
+      {
+        narration: 'Lá dentro também foram encontradas as maiores estalagmites do mundo, com oitenta metros de altura, além de pérolas de caverna de calcário do tamanho de bolas de beisebol formadas pelo gotejamento durante milênios.',
+        imageQuery: 'Giant stalagmite limestone cave',
+        fallbackThemeQuery: 'stalactites stalagmites giant cavern',
+        sceneLabel: '5/7 • Estalagmites de 80 Metros de Altura'
+      },
+      {
+        narration: 'Um lenhador local achou a fenda em 1991, mas o rugido ensurdecedor do rio subterrâneo e o vento furioso na entrada assustaram a todos até expedições britânicas entrarem em 2009. Você acamparia lá dentro? Comente!',
+        imageQuery: 'Son Doong expedition camp cave',
+        fallbackThemeQuery: 'cavers tents inside giant cave',
+        sceneLabel: '6/7 • O Rugido Que Escondeu a Entrada por 18 Anos'
+      }
+    ]
+  },
+  {
+    topic: 'Rio fervente',
+    wikiSearch: 'Shanay-Timpishka',
+    niche: 'curiosidades',
+    colorTheme: 'danger',
+    title: 'O Rio da Amazônia Que Ferve a Quase 100 Graus Sem Vulcão ♨️',
+    loopStart: '...no fundo da Floresta Amazônica peruana corre um rio sagrado de seis quilômetros cujas águas fervem a quase cem graus Celsius sem nenhum vulcão por perto!',
+    loopEnd: 'Mas o que deixou os cientistas do MIT de queixo caído foi descobrir que...',
+    scenes: [
+      {
+        narration: 'Durante séculos, histórias sobre um rio que cozinhava animais vivos na Amazônia eram tratadas pelos cientistas como lenda indígena, pois não existem vulcões ativos na bacia amazônica.',
+        imageQuery: 'Shanay-Timpishka boiling river Peru',
+        fallbackThemeQuery: 'steaming river amazon rainforest jungle',
+        sceneLabel: '1/7 • Shanay-Timpishka (Amazônia Peruana)'
+      },
+      {
+        narration: 'Em 2011, o geofísico Andrés Ruzo guiado por um xamã local mediu a temperatura do rio Shanay-Timpishka — nome que significa fervido com o calor do Sol — e o termômetro marcou noventa e três graus Celsius.',
+        imageQuery: 'Hot spring river steam jungle',
+        fallbackThemeQuery: 'thermal water vapor tropical forest',
+        sceneLabel: '2/7 • Água Medida a 93 °C na Selva'
+      },
+      {
+        narration: 'Diferente de pequenas fontes termais, o rio tem vinte e cinco metros de largura e seis metros de profundidade, mantendo águas escaldantes ao longo de seis vírgula dois quilômetros no meio da mata fechada.',
+        imageQuery: 'Amazon rainforest river aerial mist',
+        fallbackThemeQuery: 'wide river steam rainforest',
+        sceneLabel: '3/7 • 6,2 Km de Extensão e 25m de Largura'
+      },
+      {
+        narration: 'O calor é tão extremo que qualquer anfíbio, peixe ou pequeno réptil que cai acidentalmente na correnteza sofre queimaduras de terceiro grau em segundos e morre antes de conseguir nadar até a margem.',
+        imageQuery: 'Boiling water bubbles geothermal',
+        fallbackThemeQuery: 'boiling thermal spring bubbles',
+        sceneLabel: '4/7 • Água Letal em Segundos'
+      },
+      {
+        narration: 'Se o vulcão mais próximo fica a mais de setecentos quilômetros de distância nos Andes, de onde vem essa energia? Estudos sísmicos revelaram que a água da chuva desce por falhas gigantescas a três quilômetros de profundidade.',
+        imageQuery: 'Andes mountains Peru geology',
+        fallbackThemeQuery: 'geothermal fault earth crust diagram',
+        sceneLabel: '5/7 • 700 Km Longe de Qualquer Vulcão'
+      },
+      {
+        narration: 'Lá no fundo, o calor geotérmico da Terra ferve a água e a pressão das falhas bombeia tudo de volta para a superfície como uma artéria gigante do planeta. Você conhecia esse rio na Amazônia? Comente abaixo!',
+        imageQuery: 'Amazon jungle mist sunrise Peru',
+        fallbackThemeQuery: 'misty amazon rainforest river morning',
+        sceneLabel: '6/7 • A Artéria Geotérmica de 3 Km de Profundidade'
+      }
+    ]
+  },
+  {
+    topic: 'Olho do Saara',
+    wikiSearch: 'Richat Structure',
+    niche: 'misterios',
+    colorTheme: 'gold',
+    title: 'O Olho Gigante de 40 Km no Saara Que Só Foi Visto do Espaço 👁️',
+    loopStart: '...no meio do deserto do Saara existe um olho de pedra de quarenta quilômetros de largura tão gigantesco que a humanidade só percebeu sua forma quando chegou ao espaço!',
+    loopEnd: 'E o mistério sobre sua origem mudou completamente quando geólogos descobriram que...',
+    scenes: [
+      {
+        narration: 'Em junho de 1965, os astronautas da missão Gemini 4 da NASA olhavam pela janela da cápsula sobre a Mauritânia, na África, quando avistaram um alvo circular colossal de quarenta quilômetros esculpido na areia.',
+        imageQuery: 'Richat Structure satellite NASA',
+        fallbackThemeQuery: 'eye of the sahara desert satellite view',
+        sceneLabel: '1/7 • A Estrutura de Richat (40 Km)'
+      },
+      {
+        narration: 'Conhecida como a Estrutura de Richat ou Olho do Saara, a formação possui anéis concêntricos azuis e dourados tão perfeitos que passou a ser usada pelos astronautas como ponto de referência visual em órbita.',
+        imageQuery: 'Eye of the Sahara Mauritania ISS',
+        fallbackThemeQuery: 'concentric rock rings desert aerial',
+        sceneLabel: '2/7 • A Bússola dos Astronautas no Espaço'
+      },
+      {
+        narration: 'No início, todos os cientistas acreditavam que aqueles círculos eram a cicatriz do impacto de um asteroide gigante, mas expedições no solo não encontraram nenhum vestígio de rocha derretida por choque espacial.',
+        imageQuery: 'Sahara desert rock formations Mauritania',
+        fallbackThemeQuery: 'desert rocky plateau africa',
+        sceneLabel: '3/7 • Por Que Não Foi um Asteroide?'
+      },
+      {
+        narration: 'A verdadeira explicação começou há cem milhões de anos, quando o supercontinente Pangeia estava se partindo e uma bolha imensa de magma empurrou as camadas de rocha sedimentar para cima como uma abóbada.',
+        imageQuery: 'Geological dome rock layers',
+        fallbackThemeQuery: 'layered sedimentary rock canyon',
+        sceneLabel: '4/7 • A Bolha de Magma de 100 Milhões de Anos'
+      },
+      {
+        narration: 'Com o passar dos milênios, o vento e a água corroeram o topo da cúpula em velocidades diferentes, deixando os anéis de quartzito ultra-resistente em pé como muralhas circulares no meio do deserto.',
+        imageQuery: 'Quartzite rock rings desert',
+        fallbackThemeQuery: 'circular mountain ridge desert',
+        sceneLabel: '5/7 • Muralhas Naturais de Quartzito'
+      },
+      {
+        narration: 'Curiosamente, nos anéis externos foram encontradas milhares de ferramentas de pedra do Homo erectus e lanças de quando o Saara ainda tinha rios e lagos verdes. Você acha que parece uma cidade antiga? Comente aqui!',
+        imageQuery: 'Acheulean stone tools Sahara',
+        fallbackThemeQuery: 'prehistoric stone spearhead artifact',
+        sceneLabel: '6/7 • Artefatos Pré-Históricos nos Anéis'
+      }
+    ]
   }
 ];
+
+function detectTopicColorTheme(topic = '', niche = 'curiosidades', title = '') {
+  const text = `${topic} ${niche} ${title}`.toLowerCase();
+  if (/cobra|veneno|fogo|vulc|cratera|ferve|morte|chernobyl|elefante|karachay|ácid|acid|perigo|proibid|terror|sangue|natron|vespa|dragão|komodo/.test(text)) {
+    return 'danger';
+  }
+  if (/ouro|rei|imperador|terracota|cidade|pirâmide|egito|história|fort knox|inflação|mansa musa|tulip|olho do saara|anticítera/.test(text)) {
+    return 'gold';
+  }
+  if (/floresta|árvore|planta|animal|água-viva|imortal|tardígrado|fungo|formiga|caverna|son doong|biologia|pando/.test(text)) {
+    return 'emerald';
+  }
+  return 'cosmic';
+}
+
+function generatePinnedCommentForTopic(topic = '', title = '') {
+  const cleanTopic = (topic || title || 'esse lugar').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+  const t = cleanTopic.toLowerCase();
+  if (/ilha|caverna|poço|fossa|cratera|chernobyl|lago|ponto nemo|rio/.test(t)) {
+    return `📌 PERGUNTA DO DIA: Por R$ 5 MILHÕES na conta agora, você teria coragem de visitar "${cleanTopic}" por 10 minutos com equipamento de proteção ou jamais arriscaria? 👇 Comente sua resposta!`;
+  }
+  if (/animal|água-viva|tardígrado|cobra|vespa|fungo|árvore/.test(t)) {
+    return `📌 PERGUNTA DO DIA: Se a ciência conseguisse transferir essa habilidade de "${cleanTopic}" para os seres humanos, você aceitaria testar ou acha perigoso demais? 👇 Deixe sua opinião nos comentários!`;
+  }
+  return `📌 PERGUNTA DO DIA: Qual detalhe sobre "${cleanTopic}" mais te impressionou nesse vídeo? Você já conhecia essa história real? 👇 Comente aqui embaixo!`;
+}
+
+// Auto-enrich all curated dossiers with Studio 3.0 fields (colorTheme, pinnedComment, and Scene 6 comment prompt)
+for (const item of CURATED_DOCUMENTARY_FACTS) {
+  if (!item.colorTheme) {
+    item.colorTheme = detectTopicColorTheme(item.topic, item.niche, item.title);
+  }
+  if (!item.pinnedComment) {
+    item.pinnedComment = generatePinnedCommentForTopic(item.topic, item.title);
+  }
+  if (Array.isArray(item.scenes) && item.scenes.length >= 6) {
+    const s6 = item.scenes[item.scenes.length - 1];
+    if (s6 && s6.narration && !/comente|opinião|você teria coragem/i.test(s6.narration)) {
+      s6.narration = `${s6.narration.replace(/\.*$/, '')}. E você, teria coragem de ver isso de perto? Comente sua opinião!`;
+    }
+  }
+}
 
 // High-impact real Wikipedia PT-BR articles (NO obscure taxonomy stubs) for infinite deep harvesting
 const HIGH_IMPACT_WIKI_TOPICS = {
@@ -1075,7 +1399,8 @@ const HIGH_IMPACT_WIKI_TOPICS = {
     'Ornitorrinco', 'Axolote', 'Quimera (peixe)', 'Sequoiadendron giganteum',
     'Welwitschia mirabilis', 'Lago Baikal', 'Mar Morto', 'Depressão de Danakil',
     'Monte Roraima', 'Olho do Saara', 'Caverna de Son Doong', 'Rio fervente',
-    'Aurora polar', 'Raio globular', 'Fogo-de-santelmo', 'Bioluminescência'
+    'Aurora polar', 'Raio globular', 'Fogo-de-santelmo', 'Bioluminescência',
+    'Silabário Global de Sementes de Svalbard', 'Ponto Nemo', 'Cidade subterrânea de Derinkuyu'
   ],
   misterios: [
     'Manuscrito Voynich', 'Incidente da Passagem Dyatlov', 'Mary Celeste', 'Sinal Wow!',
@@ -1088,13 +1413,14 @@ const HIGH_IMPACT_WIKI_TOPICS = {
     'Mecanismo de Anticítera', 'Cérebro de Albert Einstein', 'Exército de Terracota',
     'Biblioteca de Alexandria', 'Pompeia', 'Fogo grego', 'Aço damasco',
     'Tumba de Tutancâmon', 'Machu Picchu', 'Grande Muralha da China',
-    'Coliseu', 'Pirâmide de Quéops', ' Navio Vasa', 'Peste Negra', 'Guerra dos Emus'
+    'Coliseu', 'Pirâmide de Quéops', 'Navio Vasa', 'Peste Negra', 'Guerra dos Emus',
+    'Cidade subterrânea de Derinkuyu'
   ],
   futuro: [
     'Netuno (planeta)', 'Telescópio Espacial James Webb', 'Voyager 1', 'Buraco negro supermassivo',
     'Estrela de nêutrons', 'Exoplaneta', 'Titã (satélite)', 'Europa (satélite)',
     'Esfera de Dyson', 'Paradoxo de Fermi', 'Viagem interestelar', 'Fusão nuclear',
-    'Computador quântico', 'CRISPR'
+    'Computador quântico', 'CRISPR', 'Ponto Nemo'
   ],
   motivacao: [
     'Marco Aurélio', 'Sêneca', 'Epicteto', 'Viktor Frankl', 'Miyamoto Musashi',
@@ -1107,5 +1433,11 @@ const HIGH_IMPACT_WIKI_TOPICS = {
   ]
 };
 
-module.exports = { CURATED_DOCUMENTARY_FACTS, HIGH_IMPACT_WIKI_TOPICS };
+module.exports = {
+  CURATED_DOCUMENTARY_FACTS,
+  HIGH_IMPACT_WIKI_TOPICS,
+  detectTopicColorTheme,
+  generatePinnedCommentForTopic
+};
+
 
