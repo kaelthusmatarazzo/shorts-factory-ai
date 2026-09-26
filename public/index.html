@@ -547,8 +547,11 @@
 
     <!-- GALLERY OF GENERATED VIDEOS -->
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <h3 style="font-size:0.9rem; margin:0;">📂 Últimos Shorts Gerados</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div>
+          <h3 style="font-size:0.9rem; margin:0;">📂 Últimos Shorts Gerados</h3>
+          <span id="blockedTopicsCounter" style="font-size:0.71rem; color:#00e676; font-weight:700;">🛡️ Histórico anti-repetição ativo</span>
+        </div>
         <button class="btn-secondary" style="padding:5px 10px; font-size:0.72rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="clearHistoryFromApp()">🗑️ Zerar Histórico</button>
       </div>
       <div id="historyList" class="history-list">
@@ -563,6 +566,122 @@
     let currentVideoData = null;
     let currentPreviewScript = null;
     let pollTimer = null;
+    let cachedHistoryVideos = [];
+
+    const LS_TOPICS_KEY = 'sf_excluded_topics_v2';
+    const LS_VIDEOS_KEY = 'sf_history_videos_v2';
+
+    function normKey(str) {
+      return String(str || '').toLowerCase().replace(/\s*\([^)]*\)/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '').trim();
+    }
+
+    function getLocalExcludedTopics() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(LS_TOPICS_KEY) || '[]');
+        const vids = JSON.parse(localStorage.getItem(LS_VIDEOS_KEY) || '[]');
+        const set = new Set(Array.isArray(raw) ? raw : []);
+        if (Array.isArray(vids)) {
+          for (const v of vids) {
+            if (v && v.title) set.add(v.title);
+            if (v && v.sourceTopic) set.add(v.sourceTopic);
+          }
+        }
+        return Array.from(set).filter(Boolean).slice(-400);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveLocalUsedTopic(title, sourceTopic) {
+      try {
+        const current = getLocalExcludedTopics();
+        const set = new Set(current);
+        if (title) set.add(title);
+        if (sourceTopic) set.add(sourceTopic);
+        const updated = Array.from(set).slice(-400);
+        localStorage.setItem(LS_TOPICS_KEY, JSON.stringify(updated));
+        updateBlockedTopicsBadge();
+      } catch (e) {}
+    }
+
+    function updateBlockedTopicsBadge() {
+      const el = document.getElementById('blockedTopicsCounter');
+      if (!el) return;
+      const count = getLocalExcludedTopics().length;
+      el.textContent = count > 0
+        ? `🛡️ ${count} tema(s) já usado(s) bloqueado(s) contra repetição`
+        : '🛡️ Histórico anti-repetição ativo (0 temas usados)';
+    }
+
+    // IndexedDB helper so base64 MP4 videos on Vercel stay playable in History even after refresh
+    function openVideoCacheDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) return resolve(null);
+        const req = indexedDB.open('ShortsFactoryVideoCache', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('videos')) {
+            db.createObjectStore('videos', { keyPath: 'key' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+    }
+
+    async function cacheVideoUrlInDB(title, url) {
+      if (!title || !url) return;
+      try {
+        const db = await openVideoCacheDB();
+        if (!db) return;
+        const tx = db.transaction('videos', 'readwrite');
+        tx.objectStore('videos').put({ key: normKey(title), url, savedAt: Date.now() });
+      } catch (e) {}
+    }
+
+    async function getVideoUrlFromDB(title) {
+      if (!title) return null;
+      try {
+        const db = await openVideoCacheDB();
+        if (!db) return null;
+        return await new Promise((resolve) => {
+          const tx = db.transaction('videos', 'readonly');
+          const req = tx.objectStore('videos').get(normKey(title));
+          req.onsuccess = () => resolve(req.result ? req.result.url : null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function clearVideoCacheDB() {
+      try {
+        const db = await openVideoCacheDB();
+        if (!db) return;
+        const tx = db.transaction('videos', 'readwrite');
+        tx.objectStore('videos').clear();
+      } catch (e) {}
+    }
+
+    async function saveVideoToLocalHistory(video) {
+      if (!video || !video.title) return;
+      saveLocalUsedTopic(video.title, video.sourceTopic);
+      await cacheVideoUrlInDB(video.title, video.url);
+      try {
+        const existing = JSON.parse(localStorage.getItem(LS_VIDEOS_KEY) || '[]');
+        const k = normKey(video.title);
+        const filtered = (Array.isArray(existing) ? existing : []).filter(v => normKey(v.title) !== k);
+        // Store lightweight metadata in localStorage (base64 URL is stored in IndexedDB)
+        const lightVideo = {
+          ...video,
+          url: (video.url && video.url.startsWith('data:')) ? '__INDEXED_DB__' : video.url,
+          createdAt: video.createdAt || new Date().toISOString()
+        };
+        filtered.unshift(lightVideo);
+        localStorage.setItem(LS_VIDEOS_KEY, JSON.stringify(filtered.slice(0, 30)));
+      } catch (e) {}
+    }
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -685,7 +804,12 @@
         const res = await fetch('/api/new-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ niche, customTopic, durationMode })
+          body: JSON.stringify({
+            niche,
+            customTopic,
+            durationMode,
+            excludeTopics: getLocalExcludedTopics()
+          })
         });
         const data = await res.json();
         if (!res.ok || !data.script) {
@@ -693,8 +817,9 @@
         }
 
         currentPreviewScript = data.script;
+        saveLocalUsedTopic(data.script.title, data.script.sourceTopic);
         renderScriptEditor(currentPreviewScript);
-        showToast('✏️ Roteiro carregado no Editor! Você pode editar qualquer frase ou cena.');
+        showToast('✏️ Roteiro inédito carregado e tema salvo contra repetição!');
       } catch (err) {
         alert('Erro: ' + err.message);
       } finally {
@@ -747,7 +872,8 @@
           voice,
           durationMode,
           customTopic,
-          scriptOverride: editedScript
+          scriptOverride: editedScript,
+          excludeTopics: getLocalExcludedTopics()
         };
         const res = await fetch('/api/generate', {
           method: 'POST',
@@ -764,8 +890,9 @@
         if (data.directResult) {
           btn.disabled = false;
           statusBox.style.display = 'none';
-          displayVideoResult(data.directResult);
-          loadHistoryGallery();
+          await saveVideoToLocalHistory(data.directResult);
+          await displayVideoResult(data.directResult);
+          await loadHistoryGallery();
           return;
         }
 
@@ -847,8 +974,9 @@
             clearInterval(pollTimer);
             document.getElementById('generateBtn').disabled = false;
             document.getElementById('statusBox').style.display = 'none';
-            displayVideoResult(job.result);
-            loadHistoryGallery();
+            await saveVideoToLocalHistory(job.result);
+            await displayVideoResult(job.result);
+            await loadHistoryGallery();
           } else if (job.status === 'error') {
             clearInterval(pollTimer);
             document.getElementById('generateBtn').disabled = false;
@@ -874,18 +1002,34 @@
       return { title, description, hashtags };
     }
 
-    function displayVideoResult(video) {
-      currentVideoData = video;
+    async function openHistoryVideo(idx) {
+      const v = cachedHistoryVideos[idx];
+      if (!v) return;
+      await displayVideoResult(v);
+    }
+
+    async function displayVideoResult(video) {
+      if (!video) return;
+      let resolvedUrl = video.url;
+      if (!resolvedUrl || resolvedUrl === '__INDEXED_DB__') {
+        const cachedUrl = await getVideoUrlFromDB(video.title);
+        if (cachedUrl) resolvedUrl = cachedUrl;
+      }
+
+      currentVideoData = { ...video, url: resolvedUrl || video.url };
+      saveLocalUsedTopic(video.title, video.sourceTopic);
+
       const card = document.getElementById('resultCard');
       const player = document.getElementById('shortPlayer');
       const dl = document.getElementById('downloadLink');
 
       card.style.display = 'flex';
-      player.src = video.url;
-      player.load();
-      player.play().catch(() => {});
-
-      dl.href = video.url;
+      if (resolvedUrl && resolvedUrl !== '__INDEXED_DB__') {
+        player.src = resolvedUrl;
+        player.load();
+        player.play().catch(() => {});
+        dl.href = resolvedUrl;
+      }
       dl.download = (video.title || 'short').replace(/[^\wÀ-ÿ\-]+/g, '_').slice(0, 35) + '.mp4';
 
       const seo = extractSeoMetadata(video);
@@ -960,6 +1104,9 @@
     async function clearHistoryFromApp() {
       if (!confirm('Deseja zerar todo o histórico de vídeos e temas usados?')) return;
       try {
+        localStorage.removeItem(LS_TOPICS_KEY);
+        localStorage.removeItem(LS_VIDEOS_KEY);
+        await clearVideoCacheDB();
         await fetch('/api/new-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -967,6 +1114,8 @@
         });
         document.getElementById('resultCard').style.display = 'none';
         currentVideoData = null;
+        cachedHistoryVideos = [];
+        updateBlockedTopicsBadge();
         await loadHistoryGallery();
         showToast('🗑️ Histórico zerado com sucesso!');
       } catch (e) {
@@ -1106,30 +1255,61 @@
     }
 
     async function loadHistoryGallery() {
+      let serverVideos = [];
       try {
         const res = await fetch('/api/history');
         const data = await res.json();
-        const container = document.getElementById('historyList');
-
-        if (!data.videos || data.videos.length === 0) {
-          container.innerHTML = '<p style="font-size:0.8rem; color:var(--muted);">Nenhum vídeo gerado ainda. Clique no botão acima para criar o primeiro!</p>';
-          return;
-        }
-
-        container.innerHTML = data.videos.slice(0, 10).map((v, i) => `
-          <div class="history-item" onclick='displayVideoResult(${JSON.stringify(v).replace(/'/g, "&#39;")})'>
-            <div>
-              <h4>${v.title}</h4>
-              <span>${v.badge || '🔥 Short'} &bull; ${v.duration || 25}s</span>
-            </div>
-            <span style="color:var(--primary); font-weight:800; font-size:0.82rem;">▶️ Abrir</span>
-          </div>
-        `).join('');
-
-        if (!currentVideoData && data.videos.length > 0) {
-          displayVideoResult(data.videos[0]);
+        serverVideos = Array.isArray(data.videos) ? data.videos : [];
+        if (Array.isArray(data.usedTopics) || Array.isArray(data.usedTitles)) {
+          for (const t of [...(data.usedTopics || []), ...(data.usedTitles || [])]) {
+            saveLocalUsedTopic(t, null);
+          }
         }
       } catch (e) {}
+
+      let localVideos = [];
+      try {
+        localVideos = JSON.parse(localStorage.getItem(LS_VIDEOS_KEY) || '[]');
+        if (!Array.isArray(localVideos)) localVideos = [];
+      } catch (e) {
+        localVideos = [];
+      }
+
+      // Merge localVideos + serverVideos without duplicates (prioritizing localVideos / newest first)
+      const seenKeys = new Set();
+      const merged = [];
+      for (const v of [...localVideos, ...serverVideos]) {
+        if (!v || !v.title) continue;
+        const k = normKey(v.title);
+        if (!seenKeys.has(k)) {
+          seenKeys.add(k);
+          merged.push(v);
+          saveLocalUsedTopic(v.title, v.sourceTopic);
+        }
+      }
+
+      cachedHistoryVideos = merged.slice(0, 25);
+      updateBlockedTopicsBadge();
+
+      const container = document.getElementById('historyList');
+      if (cachedHistoryVideos.length === 0) {
+        container.innerHTML = '<p style="font-size:0.8rem; color:var(--muted);">Nenhum vídeo gerado ainda. Clique no botão acima para criar o primeiro!</p>';
+        return;
+      }
+
+      container.innerHTML = cachedHistoryVideos.map((v, i) => `
+        <div class="history-item" onclick="openHistoryVideo(${i})">
+          <div>
+            <h4>${escapeHtmlAttr(v.title)}</h4>
+            <span>${escapeHtmlAttr(v.badge || 'FATOS CURIOSOS')} &bull; ${v.duration || 65}s</span>
+          </div>
+          <span style="color:var(--primary); font-weight:800; font-size:0.82rem;">▶️ Abrir</span>
+        </div>
+      `).join('');
+
+      if (!currentVideoData && cachedHistoryVideos.length > 0) {
+        await displayVideoResult(cachedHistoryVideos[0]);
+      }
     }
 
     loadHistoryGallery();
