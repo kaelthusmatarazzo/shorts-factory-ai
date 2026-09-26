@@ -113,7 +113,7 @@ function normalizeMetadata(item) {
   };
 
   const extractBestShockNumber = (fullText) => {
-    const rx = /(\b(?:\d[\d.,]*|cinco|dez|onze|doze|dezoito|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|mil)(?:\s+e\s+(?:vinte|trinta|quarenta|cinquenta|sessenta|oitenta|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|oitocentos))?\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|troncos|sementes|andares|soldados|vezes|por cento|%))/gi;
+    const rx = /(\b(?:\d[\d.,]*|um|uma|dois|duas|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos|mil)(?:\s+e\s+(?:um|uma|dois|duas|três|quatro|cinco|seis|sete|oito|nove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos))?\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|troncos|sementes|andares|soldados|vezes|por cento|%))/gi;
     const matches = Array.from(String(fullText || '').matchAll(rx)).map(m => m[1].trim());
     if (matches.length === 0) return 'Fatos Reais';
 
@@ -123,11 +123,11 @@ function normalizeMetadata(item) {
       const low = cand.toLowerCase();
       let sc = cand.length;
       if (/bilh/.test(low)) sc += 600;
-      else if (/milh/.test(low)) sc += 500;
-      else if (/\bmil\b|\d{4,}|\d+\.\d{3}/.test(low)) sc += 400;
-      else if (/oitenta|setenta|sessenta|cinquenta|quarenta|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos/.test(low)) sc += 220;
-      if (/toneladas|graus|°c|metros|quilômetros|km|roentgens|atmosferas|cobras|sementes|troncos|andares|raios/.test(low)) sc += 160;
-      if (/^(?:dois|duas|três|quatro|cinco|dez|quinze|vinte|trinta)\s+anos$/i.test(low)) sc -= 120;
+      if (/milh/.test(low)) sc += 500;
+      if (/\bmil\b|\d{4,}|\d+\.\d{3}/.test(low)) sc += 400;
+      if (/oitenta|setenta|sessenta|cinquenta|quarenta|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos/.test(low)) sc += 220;
+      if (/toneladas|graus|°c|metros|quilômetros|km|roentgens|atmosferas|cobras|sementes|troncos|andares|raios/.test(low)) sc += 190;
+      if (/^(?:um|uma|dois|duas|três|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)\s+anos$/i.test(low)) sc -= 180;
       if (sc > bestScore) {
         bestScore = sc;
         best = cand;
