@@ -37,7 +37,7 @@ app.post('/api/new-script', async (req, res) => {
 
 // Start a 1-click Short generation job
 app.post('/api/generate', async (req, res) => {
-  const { niche = 'curiosidades', voice = 'pt-BR-ThalitaMultilingualNeural', customTopic = '', durationMode = 'monetized', scriptOverride = null, excludeTopics = [] } = req.body || {};
+  const { niche = 'curiosidades', voice = 'pt-BR-ThalitaMultilingualNeural', visualStyle = 'cinema', customTopic = '', durationMode = 'monetized', scriptOverride = null, excludeTopics = [] } = req.body || {};
   const safeExclude = Array.isArray(excludeTopics) ? excludeTopics : [];
   const jobId = `job_${Date.now()}`;
 
@@ -45,7 +45,7 @@ app.post('/api/generate', async (req, res) => {
     id: jobId,
     status: 'running',
     progress: 10,
-    message: 'Descobrindo fato curioso inédito e criando roteiro >1 Minuto...'
+    message: 'Descobrindo fato curioso inédito e criando roteiro Studio 2.0 (>1 Minuto)...'
   });
 
   // On Vercel Serverless, run synchronously inside the 60s request window so Lambda doesn't freeze before completion
@@ -56,7 +56,7 @@ app.post('/api/generate', async (req, res) => {
       const scriptData = (scriptOverride && scriptOverride.title && Array.isArray(scriptOverride.scenes))
         ? scriptOverride
         : await genScript(niche, customTopic, durationMode, safeExclude);
-      const videoResult = await buildVid(scriptData, { voice });
+      const videoResult = await buildVid(scriptData, { voice, visualStyle });
       saveHist(videoResult, safeExclude);
       return res.json({ jobId, directResult: videoResult });
     } catch (err) {
@@ -81,10 +81,10 @@ app.post('/api/generate', async (req, res) => {
         id: jobId,
         status: 'running',
         progress: 20,
-        message: `Roteiro inédito: "${scriptData.title}". Baixando fotos reais...`
+        message: `Roteiro inédito: "${scriptData.title}". Baixando 14 fotos reais em lote único...`
       });
 
-      const videoResult = await buildVid(scriptData, { voice }, (progress, message) => {
+      const videoResult = await buildVid(scriptData, { voice, visualStyle }, (progress, message) => {
         jobs.set(jobId, {
           id: jobId,
           status: 'running',
