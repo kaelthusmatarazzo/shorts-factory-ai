@@ -41,7 +41,7 @@ function renderCenteredVectorPath(rawText, centerX, baselineY, targetFontSize, m
   return `<path d="${d}" fill="${fill}"/>`;
 }
 
-function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 576) {
+function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610) {
   const cleanedItems = lineItems
     .map(item => ({ word: cleanDisplayString(item.word).toUpperCase(), isHighlighted: item.isHighlighted }))
     .filter(item => item.word.length > 0);
@@ -50,7 +50,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
   let fontSize = targetFontSize;
   const computeTotalWidth = (fSize) => {
-    const spaceW = fSize * 0.28;
+    const spaceW = fSize * 0.34;
     let total = 0;
     cleanedItems.forEach((it, idx) => {
       total += hormoziFont.getAdvanceWidth(it.word, fSize);
@@ -61,12 +61,13 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
   let totalWidth = computeTotalWidth(fontSize);
   if (totalWidth > maxPixelWidth && totalWidth > 0) {
-    fontSize = Math.max(22, Math.floor(fontSize * (maxPixelWidth / totalWidth)));
+    fontSize = Math.max(24, Math.floor(fontSize * (maxPixelWidth / totalWidth)));
     totalWidth = computeTotalWidth(fontSize);
   }
 
-  const spaceW = fontSize * 0.28;
+  const spaceW = fontSize * 0.34;
   let curX = centerX - (totalWidth / 2);
+  let pillRects = '';
   let shadowPaths = '';
   let fgPaths = '';
 
@@ -75,20 +76,48 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
     const wWidth = hormoziFont.getAdvanceWidth(it.word, fontSize);
     const dShadow = hormoziFont.getPath(it.word, curX + 4, baselineY + 4, fontSize).toPathData(1);
     const dMain = hormoziFont.getPath(it.word, curX, baselineY, fontSize).toPathData(1);
-    const fillColor = it.isHighlighted ? '#FFE600' : '#FFFFFF';
 
-    shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
-    fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="${fillColor}"/>`;
+    if (it.isHighlighted) {
+      // UPGRADE #3: Submagic / CapCut Pro "Active Word Neon Pill" around the exact word being spoken!
+      const padX = Math.round(fontSize * 0.22);
+      const pillH = Math.round(fontSize * 1.24);
+      const pillY = Math.round(baselineY - fontSize * 0.94);
+      const pillW = Math.round(wWidth + padX * 2);
+      const pillX = Math.round(curX - padX);
+
+      pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="14" fill="#000000" fill-opacity="0.85"/>`;
+      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="14" fill="#FFE600" stroke="#000000" stroke-width="4"/>`;
+      fgPaths += `<path d="${dMain}" fill="#05060A" stroke="#05060A" stroke-width="1.5" stroke-linejoin="round"/>`;
+    } else {
+      shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
+      fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="#FFFFFF"/>`;
+    }
 
     curX += wWidth + spaceW;
   }
 
-  return `${shadowPaths}\n${fgPaths}`;
+  return `${pillRects}\n${shadowPaths}\n${fgPaths}`;
+}
+
+// Extract automatic Numeric Data Callout Badge from spoken narration (e.g., "12.262 METROS", "180 °C", "5 COBRAS / M²")
+function extractDataCalloutFromNarration(narrationText = '') {
+  const txt = String(narrationText || '');
+  const regexes = [
+    /(\d[\d.,]*\s*(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|km²|km\/h|km|graus(?:\s*celsius)?|°c|toneladas|quilos|kg|anos|séculos|atmosferas|roentgens|raios|cobras|árvores|soldados|engrenagens|páginas|dias|minutos|segundos|por cento|%))/i,
+    /((?:cinco|dez|onze|doze|quinze|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|mil)\s+(?:mil|milhões|bilhões)?\s*(?:de\s+)?(?:metros|quilômetros|graus|toneladas|quilos|anos|vezes|por cento|cobras|árvores|raios|soldados|dias|minutos))/i
+  ];
+  for (const rx of regexes) {
+    const m = txt.match(rx);
+    if (m && m[1]) {
+      return `DADO REAL: ${m[1].toUpperCase().slice(0, 28)}`;
+    }
+  }
+  return '';
 }
 
 // Extract clean proper/scientific noun from scene imageQuery without generic English filler words
 function extractCleanEntityName(rawQuery, sourceTopic) {
-  const stopWords = /\b(photo|photography|science|nature|microscope|closeup|extreme|environment|history|world|research|technology|planet|earth|mystery|zombie|ant|snake|tree|coast|ocean|island|fire|night|daytime|desert|red|water|volcano|crust|mineral|lake|bird|moss|droplet|tun|state|electron|protein|shield|molecular|asteroid|impact|dinosaur|extinction|gas|vents|flames|mining|turquoise|acid|crater|miners|carrying|baskets|giant|crystals|scientists|cooling|suits|human|lungs|alveoli|medical|illustration|underground|flooded|cavern|spores|mandible|macro|rainforest|canopy|sunlight|leaf|biting|vein|fruiting|body|head|bolts|storm|cloud|mountains|clouds|cumulonimbus|anvil|atmosphere|ozone|space|white|bark|trunks|root|system|forest|aerial|autumn|gold|ancient|mountain|snow|golden|leaves|gear|fragment|x-ray|tomography|gears|reconstruction|model|solar|eclipse|astronomy|pages|botanical|text|script|plants|astronomical|diagram|rare|book|library|subglacial|sheet|radar|sea|ice|brine|iron|oxide|extremophile|bacteria|deep|abyssal|zone|fish|creature|bioluminescence|exploration|submarine|fishing|trawler|net|uranus|and|nasa|carbon|atom|diamond|structure|rough|uncut|diamonds|laser|planetary|core|portrait|historical|lecturing|brain|anatomy|glass|slides|mirror|hexagonal|cacti|stars|reflection|observation|satellite|orbit|lithium|evaporation|ponds|map|bathyscaphe| snailfish|hydrothermal|vent|floor|submersible|rock|needles|limestone|karst|pinnacles|suspension|bridge|lemur|canyon|below|beach|jungle|shipwreck|coral|reef|navy|guard|helicopter|low|tide|bay|of|bengal|sunset|nuclear|power|plant|sarcophagus|control|room|reactor|geiger|counter|radiation|dosimeter|abandoned|city|new|safe|confinement|arch|radioactive|sample|warriors|horses|chariots|warrior|face|mausoleum|first|mound|liquid|mercury|metal|droplets|museum|pit)\b/gi;
+  const stopWords = /\b(photo|photography|science|nature|microscope|closeup|extreme|environment|history|world|research|technology|planet|earth|mystery|zombie|ant|snake|tree|coast|ocean|island|fire|night|daytime|desert|red|water|volcano|crust|mineral|lake|bird|moss|droplet|tun|state|electron|protein|shield|molecular|asteroid|impact|dinosaur|extinction|gas|vents|flames|mining|turquoise|acid|crater|miners|carrying|baskets|giant|crystals|scientists|cooling|suits|human|lungs|alveoli|medical|illustration|underground|flooded|cavern|spores|mandible|macro|rainforest|canopy|sunlight|leaf|biting|vein|fruiting|body|head|bolts|storm|cloud|mountains|clouds|cumulonimbus|anvil|atmosphere|ozone|space|white|bark|trunks|root|system|forest|aerial|autumn|gold|ancient|mountain|snow|golden|leaves|gear|fragment|x-ray|tomography|gears|reconstruction|model|solar|eclipse|astronomy|pages|botanical|text|script|plants|astronomical|diagram|rare|book|library|subglacial|sheet|radar|sea|ice|brine|iron|oxide|extremophile|bacteria|deep|abyssal|zone|fish|creature|bioluminescence|exploration|submarine|fishing|trawler|net|uranus|and|nasa|carbon|atom|diamond|structure|rough|uncut|diamonds|laser|planetary|core|portrait|historical|lecturing|brain|anatomy|glass|slides|mirror|hexagonal|cacti|stars|reflection|observation|satellite|orbit|lithium|evaporation|ponds|map|bathyscaphe|snailfish|hydrothermal|vent|floor|submersible|rock|needles|limestone|karst|pinnacles|suspension|bridge|lemur|canyon|below|beach|jungle|shipwreck|coral|reef|navy|guard|helicopter|low|tide|bay|of|bengal|sunset|nuclear|power|plant|sarcophagus|control|room|reactor|geiger|counter|radiation|dosimeter|abandoned|city|new|safe|confinement|arch|radioactive|sample|warriors|horses|chariots|warrior|face|mausoleum|first|mound|liquid|mercury|metal|droplets|museum|pit)\b/gi;
   const cleaned = String(rawQuery || '')
     .replace(stopWords, ' ')
     .replace(/\s+/g, ' ')
@@ -97,14 +126,14 @@ function extractCleanEntityName(rawQuery, sourceTopic) {
   return String(sourceTopic || '').replace(/\s*\([^)]*\)/g, '').trim();
 }
 
-// Pre-fetch 25 to 45 REAL verified Wikimedia/Wikipedia photographs of the exact topic in 1-2 API requests (ZERO rate limits!)
-// and contextually assign a unique photo of the topic to each scene based on what the voice is saying!
+// UPGRADE #1 & #5: Pre-fetch 35-50 REAL verified Wikimedia/Wikipedia photographs in 1-2 batch requests
+// and assign TWO distinct photo queues (Shot A + Shot B) per scene (14 real photos per video!)
 async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const scenes = scriptData.scenes || [];
   const rawTopic = String(scriptData.sourceTopic || scriptData.title || 'Ciência').replace(/\s*\([^)]*\)/g, '').trim();
   let enTitle = '';
   let heroUrl = scriptData.scenes?.[0]?.directImageUrl || null;
-  const pool = []; // Array of { url, title }
+  const pool = [];
   const seenUrls = new Set();
 
   const addCandidate = (url, title = '') => {
@@ -115,7 +144,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     pool.push({ url, title: String(title || '').toLowerCase() });
   };
 
-  if (heroUrl) addCandidate(heroUrl, rawTopic);
+  if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
 
   // 1. Single Call to PT Wikipedia: get English title (langlinks) + main pageimage
   try {
@@ -137,7 +166,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Build a SINGLE combined OR query for Wikimedia Commons so we get up to 45 real photos of the topic in 1 HTTP call!
+  // 2. Single Combined OR Query on Wikimedia Commons (gsrlimit=50)
   const entitySet = new Set([rawTopic]);
   if (enTitle) entitySet.add(enTitle);
   for (const s of scenes) {
@@ -149,7 +178,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
 
   try {
-    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=45&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+    const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=50&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
     const cRes = await fetch(commonsUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
       signal: AbortSignal.timeout(4500)
@@ -164,11 +193,10 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 3. If pool still has fewer than 8 photos, do 1 fallback search on Wikimedia Commons using broader topic words (without quotes)
-  if (pool.length < 8) {
+  if (pool.length < 14) {
     try {
       const broadQuery = `filetype:bitmap ${enTitle || rawTopic}`;
-      const broadUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(broadQuery)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+      const broadUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(broadQuery)}&gsrlimit=35&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
       const bRes = await fetch(broadUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
         signal: AbortSignal.timeout(4000)
@@ -183,21 +211,20 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     } catch (e) {}
   }
 
-  console.log(`📸 [Topic Photo Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais da Wikipédia/Wikimedia carregadas em lote único!`);
+  console.log(`📸 [Studio 2.0 Dual-Shot Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais verificadas!`);
 
-  // 4. Assign the best matching UNUSED photo from the topic pool to each scene
+  // 3. Assign TWO distinct photo queues (shotAQueue for 0-50%, shotBQueue for 50-100%) to every scene!
   const usedIndices = new Set();
-  const sceneAssignedQueues = scenes.map((s, sceneIdx) => {
+  const sceneDualQueues = scenes.map((s, sceneIdx) => {
     const keywords = `${s.imageQuery || ''} ${s.sceneLabel || ''} ${s.narration || ''}`
       .toLowerCase()
       .replace(/[^\wÀ-ÿ\s]/g, ' ')
       .split(/\s+/)
       .filter(w => w.length >= 4);
 
-    // Score each available photo in the pool for this specific scene
-    const scoredPool = pool.map((item, idx) => {
+    const scoreAvailablePool = () => pool.map((item, idx) => {
       let score = usedIndices.has(idx) ? -1000 : 0;
-      if (sceneIdx === 0 && idx === 0) score += 500; // Scene 1 always gets Hero photo first
+      if (sceneIdx === 0 && idx === 0 && !usedIndices.has(0)) score += 600;
       for (const kw of keywords) {
         if (item.title.includes(kw)) score += 25;
       }
@@ -206,19 +233,24 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       return { item, idx, score };
     }).sort((a, b) => b.score - a.score);
 
-    const bestChoice = scoredPool[0];
-    if (bestChoice && bestChoice.idx !== undefined) {
-      usedIndices.add(bestChoice.idx);
-    }
+    const rankedA = scoreAvailablePool();
+    if (rankedA[0] && rankedA[0].idx !== undefined) usedIndices.add(rankedA[0].idx);
+    const shotAQueue = rankedA.slice(0, 3).map(x => x.item.url);
 
-    // Return a queue of top 4 candidate URLs for this scene (primary + 3 backups from the same topic pool)
-    return scoredPool.slice(0, 4).map(x => x.item.url);
+    const rankedB = scoreAvailablePool();
+    if (rankedB[0] && rankedB[0].idx !== undefined) usedIndices.add(rankedB[0].idx);
+    const shotBQueue = rankedB.slice(0, 3).map(x => x.item.url);
+
+    return {
+      shotAQueue: shotAQueue.length > 0 ? shotAQueue : shotBQueue,
+      shotBQueue: shotBQueue.length > 0 ? shotBQueue : shotAQueue
+    };
   });
 
-  return sceneAssignedQueues;
+  return sceneDualQueues;
 }
 
-async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0) {
+async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag = 'A') {
   for (const imgUrl of urlQueue) {
     if (!imgUrl) continue;
     try {
@@ -230,7 +262,7 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0) {
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 5500) {
           const normalized = await sharp(buf).png().toBuffer();
-          console.log(`✅ [Cena ${sceneIdx + 1}] Foto contextual do tema carregada: ${imgUrl.split('/').pop().slice(0, 45)} (${Math.round(buf.length / 1024)} KB)`);
+          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Foto real: ${imgUrl.split('/').pop().slice(0, 40)} (${Math.round(buf.length / 1024)} KB)`);
           return normalized;
         }
       }
@@ -250,14 +282,69 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0) {
   return await sharp(Buffer.from(fallbackSvg)).png().toBuffer();
 }
 
-// Group exact Microsoft Edge WordBoundary items into timed Hormozi subtitle chunks (100% locked to voice!)
+// Pre-build a composited base 720x1280 canvas (Cinema Full-Screen 9:16 or Framed Card) for ultra-fast frame rendering
+async function buildBaseSceneCanvas(rawPhotoBuffer, blurredBackdropBuffer, zoomFactor = 1.0, visualStyle = 'cinema', themeColor = '#00f0ff') {
+  const isCinema = visualStyle !== 'card';
+  const boxW = isCinema ? 688 : CARD_W;
+  const boxH = isCinema ? 930 : CARD_H;
+  const boxLeft = isCinema ? 16 : 40;
+  const boxTop = isCinema ? 132 : 158;
+
+  const scaledW = Math.round(boxW * zoomFactor);
+  const scaledH = Math.round(boxH * zoomFactor);
+
+  const resizedPhoto = await sharp(rawPhotoBuffer)
+    .resize(scaledW, scaledH, { fit: 'cover', position: 'attention' })
+    .extract({
+      left: Math.floor((scaledW - boxW) / 2),
+      top: Math.floor((scaledH - boxH) / 2),
+      width: boxW,
+      height: boxH
+    })
+    .png()
+    .toBuffer();
+
+  const roundedMask = Buffer.from(
+    `<svg width="${boxW}" height="${boxH}"><rect x="0" y="0" width="${boxW}" height="${boxH}" rx="28" ry="28" fill="#fff"/></svg>`
+  );
+
+  const roundedPhotoCard = await sharp(resizedPhoto)
+    .composite([{ input: roundedMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  // Subtle dark cinema gradient at the bottom of the photo card so subtitles and labels have 100% contrast
+  const cardShadowOverlay = Buffer.from(
+    `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="cGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.68"/>
+          <stop offset="18%" stop-color="#000000" stop-opacity="0.10"/>
+          <stop offset="55%" stop-color="#000000" stop-opacity="0.22"/>
+          <stop offset="82%" stop-color="#000000" stop-opacity="0.86"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.96"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#cGrad)"/>
+      <rect x="${boxLeft - 2}" y="${boxTop - 2}" width="${boxW + 4}" height="${boxH + 4}" rx="30" fill="none" stroke="${themeColor}" stroke-width="3.5" stroke-opacity="0.85"/>
+    </svg>`
+  );
+
+  return await sharp(blurredBackdropBuffer)
+    .composite([
+      { input: roundedPhotoCard, left: boxLeft, top: boxTop },
+      { input: cardShadowOverlay, left: 0, top: 0 }
+    ])
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}
+
+// UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
 function buildExactTimedChunks(narrationText, wordBoundaries, sceneDurationSec) {
-  // Re-attach punctuation from original narration to the corresponding WordBoundary words
   const rawTokens = narrationText.trim().split(/\s+/).filter(Boolean);
 
   if (wordBoundaries && wordBoundaries.length > 0) {
     const enriched = wordBoundaries.map((wb, i) => {
-      // Match punctuation suffix if rawToken at roughly same index has punctuation
       const candidateRaw = rawTokens[i] || wb.word;
       const punctMatch = candidateRaw.match(/[,.;:!?]+$/);
       const displayWord = punctMatch && !wb.word.endsWith(punctMatch[0])
@@ -270,7 +357,7 @@ function buildExactTimedChunks(narrationText, wordBoundaries, sceneDurationSec) 
       };
     });
 
-    // Group into tight 2-3 word visual chunks (max 16 chars per chunk)
+    // Group into tight 2-3 word visual phrases (max 16 chars per phrase)
     const grouped = [];
     let current = [];
     let currentChars = 0;
@@ -296,43 +383,48 @@ function buildExactTimedChunks(narrationText, wordBoundaries, sceneDurationSec) 
     }
     if (current.length > 0) grouped.push(current);
 
-    // Compute exact duration of each chunk from the exact WordBoundary start of chunk[c] to start of chunk[c+1]
-    // Notice that the sum of durations is MATHEMATICALLY IDENTICAL to sceneDurationSec!
-    const timedChunks = [];
+    // Create Word-by-Word Active Pill sub-steps for each phrase so the Neon Pill jumps across each spoken word!
+    const wordStepChunks = [];
     for (let c = 0; c < grouped.length; c++) {
-      const startSec = c === 0 ? 0.0 : grouped[c][0].offsetSec;
-      const nextStartSec = (c < grouped.length - 1)
-        ? Math.max(startSec + 0.08, grouped[c + 1][0].offsetSec)
+      const phraseItems = grouped[c];
+      const phraseWords = phraseItems.map(x => x.word);
+      const phraseStartSec = c === 0 ? 0.0 : phraseItems[0].offsetSec;
+      const nextPhraseStartSec = (c < grouped.length - 1)
+        ? Math.max(phraseStartSec + 0.09, grouped[c + 1][0].offsetSec)
         : sceneDurationSec;
 
-      const dur = Math.max(0.08, nextStartSec - startSec);
-      timedChunks.push({
-        words: grouped[c].map(x => x.word),
-        duration: dur
-      });
+      for (let wIdx = 0; wIdx < phraseItems.length; wIdx++) {
+        const wStart = (c === 0 && wIdx === 0) ? 0.0 : phraseItems[wIdx].offsetSec;
+        const wEnd = (wIdx < phraseItems.length - 1)
+          ? Math.max(wStart + 0.06, phraseItems[wIdx + 1].offsetSec)
+          : Math.max(wStart + 0.06, nextPhraseStartSec);
+
+        wordStepChunks.push({
+          words: phraseWords,
+          activeWordIdx: wIdx,
+          duration: Math.max(0.06, wEnd - wStart)
+        });
+      }
     }
 
-    // Normalize minor clamping differences so sum === sceneDurationSec to the microsecond
-    const sumDur = timedChunks.reduce((acc, tc) => acc + tc.duration, 0);
-    if (timedChunks.length > 0 && Math.abs(sumDur - sceneDurationSec) > 0.0001) {
+    const sumDur = wordStepChunks.reduce((acc, tc) => acc + tc.duration, 0);
+    if (wordStepChunks.length > 0 && Math.abs(sumDur - sceneDurationSec) > 0.0001) {
       const ratio = sceneDurationSec / sumDur;
-      timedChunks.forEach(tc => { tc.duration *= ratio; });
+      wordStepChunks.forEach(tc => { tc.duration *= ratio; });
     }
 
-    return timedChunks;
+    return wordStepChunks;
   }
 
-  // Fallback if Google TTS was used instead of Edge TTS
   const fallbackWords = rawTokens.length > 0 ? rawTokens : ['...'];
   const chunks = [];
   for (let i = 0; i < fallbackWords.length; i += 2) {
     chunks.push(fallbackWords.slice(i, i + 2));
   }
-  const eachDur = sceneDurationSec / chunks.length;
-  return chunks.map(w => ({ words: w, duration: eachDur }));
+  const eachDur = sceneDurationSec / Math.max(1, chunks.length);
+  return chunks.map(w => ({ words: w, activeWordIdx: 0, duration: eachDur }));
 }
 
-// Group words of a chunk into lines of max ~12 chars so no line ever overflows horizontally
 function wrapWordsIntoSafeLines(wordsChunk, highlightIdx) {
   const lines = [];
   let curLine = [];
@@ -353,14 +445,12 @@ function wrapWordsIntoSafeLines(wordsChunk, highlightIdx) {
   return lines;
 }
 
-// Concatenate multiple 44.1kHz 16-bit Stereo WAV files sample-accurately into one Master WAV
 function concatenateWavFilesSampleExact(wavPaths, outputMasterWavPath) {
   const pcmBuffers = [];
   let totalPcmBytes = 0;
 
   for (const p of wavPaths) {
     const buf = fs.readFileSync(p);
-    // Standard WAV header is 44 bytes; extract raw PCM audio samples
     const pcm = buf.subarray(44);
     pcmBuffers.push(pcm);
     totalPcmBytes += pcm.length;
@@ -385,15 +475,13 @@ function concatenateWavFilesSampleExact(wavPaths, outputMasterWavPath) {
   return totalPcmBytes / (44100 * 4);
 }
 
-// Trim leading silence on Scene 0 and trailing silence on Final Scene using WordBoundary offsets
-// so that when the video loops from End -> 0:00, the narrator's voice continues with zero dead gap!
 function trimSceneWavForSeamlessLoop(asset, mode) {
   if (!asset || !asset.wordBoundaries || asset.wordBoundaries.length === 0) return;
 
   const buf = fs.readFileSync(asset.audioWavPath);
   if (buf.length <= 44) return;
   const pcm = buf.subarray(44);
-  const bytesPerFrame = 4; // 16-bit stereo = 4 bytes
+  const bytesPerFrame = 4;
   const sampleRate = 44100;
 
   let startByte = 0;
@@ -442,104 +530,103 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Render a complete vertical 9:16 frame with auto-scaled safe-margin Hormozi subtitles
+// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas
 async function renderCaptionedFrame({
-  rawPhotoBuffer,
-  blurredBackdropBuffer,
+  baseCanvasBuffer,
   wordsChunk,
+  activeWordIdx = 0,
   badgeText,
   sceneLabel,
+  dataCalloutText = '',
+  coverTitleText = '',
+  isFlashCut = false,
   themeColor,
-  zoomFactor,
   progressRatio,
   outputFramePath
 }) {
-  const resizedPhoto = await sharp(rawPhotoBuffer)
-    .resize(Math.round(CARD_W * zoomFactor), Math.round(CARD_H * zoomFactor), { fit: 'cover', position: 'attention' })
-    .extract({
-      left: Math.floor((Math.round(CARD_W * zoomFactor) - CARD_W) / 2),
-      top: Math.floor((Math.round(CARD_H * zoomFactor) - CARD_H) / 2),
-      width: CARD_W,
-      height: CARD_H
-    })
-    .png()
-    .toBuffer();
-
-  const roundedMask = Buffer.from(
-    `<svg width="${CARD_W}" height="${CARD_H}"><rect x="0" y="0" width="${CARD_W}" height="${CARD_H}" rx="24" ry="24" fill="#fff"/></svg>`
-  );
-
-  const roundedPhotoCard = await sharp(resizedPhoto)
-    .composite([{ input: roundedMask, blend: 'dest-in' }])
-    .png()
-    .toBuffer();
-
-  let highlightIdx = wordsChunk.length - 1;
-  wordsChunk.forEach((w, idx) => {
-    if (w.replace(/[^\wÀ-ÿ]/g, '').length >= 5) highlightIdx = idx;
-  });
-
+  const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
 
-  let fontSize = 50;
-  if (maxCharsInAnyLine >= 18) fontSize = 31;
-  else if (maxCharsInAnyLine >= 15) fontSize = 36;
-  else if (maxCharsInAnyLine >= 13) fontSize = 42;
-  else if (maxCharsInAnyLine >= 11) fontSize = 46;
+  let fontSize = 52;
+  if (maxCharsInAnyLine >= 18) fontSize = 33;
+  else if (maxCharsInAnyLine >= 15) fontSize = 38;
+  else if (maxCharsInAnyLine >= 13) fontSize = 44;
+  else if (maxCharsInAnyLine >= 11) fontSize = 48;
 
-  const lineSpacing = Math.round(fontSize * 1.35);
-  const baseStartY = wrappedLines.length === 1 ? 825 : (wrappedLines.length === 2 ? 790 : 765);
+  const lineSpacing = Math.round(fontSize * 1.42);
+  const baseStartY = wrappedLines.length === 1 ? 865 : (wrappedLines.length === 2 ? 830 : 800);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 576);
+    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600);
   }).join('\n');
 
   const cleanBadge = cleanDisplayString(badgeText || 'FATOS CURIOSOS').replace(/\s*-\s*LOOP.*$/i, '').trim() || 'FATOS CURIOSOS';
-  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').replace(/Loop Infinito/gi, '').slice(0, 42);
-  const badgeVectorSvg = renderCenteredVectorPath(cleanBadge, 360, 109, 22, 340, themeColor);
-  const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 609, 17, 560, '#e0e0ff');
+  const safeSceneLabel = cleanDisplayString(sceneLabel || 'Imagem Real de Arquivo').replace(/Loop Infinito/gi, '').slice(0, 44);
+  const badgeVectorSvg = renderCenteredVectorPath(cleanBadge, 360, 99, 22, 340, themeColor);
+  const labelVectorSvg = renderCenteredVectorPath(safeSceneLabel, 360, 1025, 17, 560, '#e0f4ff');
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
+  // UPGRADE #2: Glassmorphism Numeric Data Callout Badge ("DADO REAL: 12.262 METROS")
+  let dataCalloutSvg = '';
+  if (dataCalloutText) {
+    const calloutPath = renderCenteredVectorPath(dataCalloutText, 360, 186, 19, 510, '#FFE600');
+    dataCalloutSvg = `
+      <rect x="85" y="152" width="550" height="48" rx="14" fill="#070812" fill-opacity="0.88" stroke="#FFE600" stroke-width="2.5"/>
+      ${calloutPath}
+    `;
+  }
+
+  // UPGRADE #7: Frame-0 Viral Cover Poster Banner (for TikTok / YouTube Shorts Grid Thumbnail!)
+  let coverPosterSvg = '';
+  if (coverTitleText) {
+    const cleanCover = cleanDisplayString(coverTitleText).toUpperCase();
+    const words = cleanCover.split(/\s+/);
+    const mid = Math.ceil(words.length / 2);
+    const line1 = words.slice(0, mid).join(' ');
+    const line2 = words.slice(mid).join(' ');
+    const p1 = renderCenteredVectorPath(line1, 360, 495, 38, 600, '#FFE600', '#000000', 10);
+    const p2 = renderCenteredVectorPath(line2, 360, 550, 38, 600, '#FFFFFF', '#000000', 10);
+    coverPosterSvg = `
+      <rect x="36" y="430" width="648" height="156" rx="24" fill="#05060d" fill-opacity="0.90" stroke="#FFE600" stroke-width="5"/>
+      ${p1}
+      ${p2}
+    `;
+  }
+
+  // Subtle 60ms Cinema Cut Flash on photo transitions
+  const flashRectSvg = isFlashCut
+    ? `<rect width="100%" height="100%" fill="#ffffff" fill-opacity="0.14"/>`
+    : '';
+
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="vignette" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0.72"/>
-        <stop offset="20%" stop-color="#000000" stop-opacity="0.25"/>
-        <stop offset="60%" stop-color="#000000" stop-opacity="0.45"/>
-        <stop offset="100%" stop-color="#000000" stop-opacity="0.92"/>
-      </linearGradient>
-    </defs>
-
-    <rect width="100%" height="100%" fill="url(#vignette)"/>
-
-    <rect x="170" y="74" width="380" height="54" rx="27" fill="#080812" fill-opacity="0.88" stroke="${themeColor}" stroke-width="3"/>
+    <rect x="170" y="64" width="380" height="52" rx="26" fill="#080812" fill-opacity="0.92" stroke="${themeColor}" stroke-width="3"/>
     ${badgeVectorSvg}
 
-    <rect x="38" y="156" width="644" height="484" rx="26" fill="none" stroke="${themeColor}" stroke-width="4" stroke-opacity="0.9"/>
+    ${dataCalloutSvg}
 
-    <rect x="56" y="582" width="608" height="42" rx="14" fill="#000000" fill-opacity="0.78"/>
+    <rect x="56" y="998" width="608" height="40" rx="14" fill="#05060d" fill-opacity="0.86" stroke="${themeColor}" stroke-width="1.5" stroke-opacity="0.55"/>
     ${labelVectorSvg}
 
     <g>
       ${subtitleLinesSvg}
     </g>
 
+    ${coverPosterSvg}
+    ${flashRectSvg}
+
     <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
     <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${themeColor}"/>
   </svg>`;
 
-  await sharp(blurredBackdropBuffer)
-    .composite([
-      { input: roundedPhotoCard, left: 40, top: 158 },
-      { input: Buffer.from(hudSvg), left: 0, top: 0 }
-    ])
-    .jpeg({ quality: 92 })
+  await sharp(baseCanvasBuffer)
+    .composite([{ input: Buffer.from(hudSvg), left: 0, top: 0 }])
+    .jpeg({ quality: 91 })
     .toFile(outputFramePath);
 }
 
-// Single-Pass Master Timeline Renderer (Zero Drift + Native WordBoundary Hardware Timestamps)
+// Single-Pass Studio 2.0 Master Timeline Renderer
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -557,45 +644,54 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const { synthesizeSpeechWithTimings, generateBackgroundMusicWav: genBgm } = require('./tts_and_audio');
 
   const voiceName = options.voice || 'pt-BR-ThalitaMultilingualNeural';
+  const visualStyle = options.visualStyle || 'cinema';
   const scenes = scriptData.scenes || [];
   const themeColor = scriptData.themeColor || '#00f0ff';
   const badgeText = 'FATOS CURIOSOS';
 
-  onProgress(15, 'Gravando voz neural com timestamps exatos por palavra (WordBoundary)...');
+  onProgress(15, 'Buscando 14 fotos reais do tema + Gravando voz com entonação emocional...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
-  const blurSigma = process.env.VERCEL ? 12 : 22;
+  const blurSigma = process.env.VERCEL ? 12 : 20;
 
-  // 1. Pre-fetch 25-45 real Wikipedia/Wikimedia photos of the exact topic in 1 single batch call (avoids 429 rate-limit!)
-  const scenePhotoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
+  // 1. Pre-fetch 35-50 real Wikipedia/Wikimedia photos of the exact topic and assign Shot A + Shot B per scene
+  const sceneDualQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
 
-  // 2. PARALLEL SCENE PREPARATION: Run TTS + Assigned Topic Photo Download + Backdrop Blur concurrently!
+  // 2. PARALLEL SCENE PREPARATION: Run Emotional TTS + Download Shot A & Shot B + Build 4 Dynamic Camera Canvases per scene!
   const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
+    const dualQ = sceneDualQueues[i] || sceneDualQueues[0] || { shotAQueue: [], shotBQueue: [] };
 
-    const [ttsResult, rawPhotoBuffer] = await Promise.all([
-      synthesizeSpeechWithTimings(s.narration, audioWavPath, voiceName),
-      downloadAssignedTopicPhoto(scenePhotoQueues[i] || scenePhotoQueues[0] || [], i)
+    const [ttsResult, rawPhotoA, rawPhotoB] = await Promise.all([
+      synthesizeSpeechWithTimings(s.narration, audioWavPath, voiceName, i),
+      downloadAssignedTopicPhoto(dualQ.shotAQueue, i, 'A'),
+      downloadAssignedTopicPhoto(dualQ.shotBQueue, i, 'B')
     ]);
 
-    const blurredBackdropBuffer = await sharp(rawPhotoBuffer)
-      .resize(WIDTH, HEIGHT, { fit: 'cover' })
-      .blur(blurSigma)
-      .modulate({ brightness: 0.42, saturation: 1.25 })
-      .png()
-      .toBuffer();
+    const [backdropA, backdropB] = await Promise.all([
+      sharp(rawPhotoA).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer(),
+      sharp(rawPhotoB).resize(WIDTH, HEIGHT, { fit: 'cover' }).blur(blurSigma).modulate({ brightness: 0.36, saturation: 1.25 }).png().toBuffer()
+    ]);
+
+    // Pre-build 4 dynamic camera canvases (Shot A Wide, Shot A Punch-In, Shot B Wide, Shot B Punch-In)
+    const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
+      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, themeColor),
+      buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, themeColor),
+      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, themeColor),
+      buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, themeColor)
+    ]);
 
     return {
       index: i,
       narration: s.narration,
       sceneLabel: s.sceneLabel || scriptData.title,
+      dataCallout: extractDataCalloutFromNarration(s.narration),
       audioWavPath,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries,
-      rawPhotoBuffer,
-      blurredBackdropBuffer
+      canvases: [canvasA1, canvasA2, canvasB1, canvasB2]
     };
   }));
 
@@ -605,73 +701,23 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += preparedScenes[i].duration;
   }
 
-  // On Vercel Serverless, skip sequential bonus loop so total wall time stays ~28s (the 7 parallel scenes already exceed 62s!)
-  const wantMonetizedLength = !process.env.VERCEL && (scriptData.durationMode || 'monetized') !== 'short';
-  let bonusIdx = 0;
-  const bonusFacts = [
-    `Outro dado comprovado pelos pesquisadores sobre ${scriptData.sourceTopic || 'esse tema'} é como suas condições físicas raras continuam sendo monitoradas por universidades do mundo inteiro.`,
-    `Esses levantamentos científicos ajudam a explicar por que ${scriptData.sourceTopic || 'esse fenômeno'} é considerado um caso único nos registros da natureza.`
-  ];
-
-  while (wantMonetizedLength && totalDuration < 62.5 && bonusIdx < bonusFacts.length) {
-    const extraNarration = bonusFacts[bonusIdx];
-    const extraWavPath = path.join(tmpDir, `scene_bonus_${bonusIdx}.wav`);
-
-    const [extraTts, extraPhotoBuffer] = await Promise.all([
-      synthesizeSpeechWithTimings(extraNarration, extraWavPath, voiceName),
-      downloadAssignedTopicPhoto(scenePhotoQueues[(bonusIdx + 2) % scenePhotoQueues.length] || scenePhotoQueues[0] || [], scenes.length + bonusIdx)
-    ]);
-
-    const extraBackdropBuffer = await sharp(extraPhotoBuffer)
-      .resize(WIDTH, HEIGHT, { fit: 'cover' })
-      .blur(blurSigma)
-      .modulate({ brightness: 0.42, saturation: 1.25 })
-      .png()
-      .toBuffer();
-
-    const lastScene = sceneAssets.pop();
-    sceneStartTimes.pop();
-    totalDuration -= lastScene.duration;
-
-    sceneStartTimes.push(totalDuration);
-    sceneAssets.push({
-      index: sceneAssets.length,
-      narration: extraNarration,
-      sceneLabel: `Curiosidade Extra • Análise Científica`,
-      audioWavPath: extraWavPath,
-      duration: extraTts.duration,
-      wordBoundaries: extraTts.wordBoundaries,
-      rawPhotoBuffer: extraPhotoBuffer,
-      blurredBackdropBuffer: extraBackdropBuffer
-    });
-    totalDuration += extraTts.duration;
-
-    sceneStartTimes.push(totalDuration);
-    lastScene.index = sceneAssets.length;
-    sceneAssets.push(lastScene);
-    totalDuration += lastScene.duration;
-
-    bonusIdx++;
-  }
-
   // SEAMLESS INFINITE LOOP (ACOUSTIC ZERO-GAP TRIM):
-  // Trim dead silence before the first spoken word of Scene 1 (0:00) and after the last spoken word of the Final Scene
   if (sceneAssets.length >= 2) {
     trimSceneWavForSeamlessLoop(sceneAssets[0], 'start');
     trimSceneWavForSeamlessLoop(sceneAssets[sceneAssets.length - 1], 'end');
   }
 
-  // Recompute exact sceneStartTimes and totalDuration after sample-exact loop trimming
   sceneStartTimes.length = 0;
+  const midCutTimes = [];
   totalDuration = 0;
   for (let i = 0; i < sceneAssets.length; i++) {
     sceneStartTimes.push(totalDuration);
+    midCutTimes.push(totalDuration + sceneAssets[i].duration * 0.50);
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(65, 'Renderizando quadros em paralelo com sincronização WordBoundary...');
+  onProgress(68, 'Renderizando legendas Active Word Pill + 14 cortes de câmera Cinema 9:16...');
 
-  // Build ONE Single Master Frame Timeline across all scenes (ZERO scene concat drift!)
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
@@ -684,30 +730,51 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     const isFinalLoopScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
 
     let sceneElapsed = 0;
+    let triggeredMidFlash = false;
+
     for (let c = 0; c < timedChunks.length; c++) {
       const framePath = path.join(tmpDir, `s${i}_c${c}.jpg`);
       const thisChunkDur = timedChunks[c].duration;
+      const chunkMidSec = sceneElapsed + (thisChunkDur * 0.5);
+      const sceneProgress = chunkMidSec / Math.max(0.1, asset.duration);
       sceneElapsed += thisChunkDur;
 
       const isVisualLoopBridge = isFinalLoopScene && (c >= Math.max(1, timedChunks.length - 2));
-      const framePhotoBuf = isVisualLoopBridge ? sceneAssets[0].rawPhotoBuffer : asset.rawPhotoBuffer;
-      const frameBackdropBuf = isVisualLoopBridge ? sceneAssets[0].blurredBackdropBuffer : asset.blurredBackdropBuffer;
-      const frameLabel = isVisualLoopBridge
-        ? sceneAssets[0].sceneLabel
-        : asset.sceneLabel;
-      const zoomFactor = isVisualLoopBridge
-        ? 1.01
-        : (1.0 + (c / Math.max(1, timedChunks.length)) * 0.14);
+
+      // Select among the 4 dynamic camera cuts per scene (0-25%: A1, 25-50%: A2, 50-75%: B1, 75-100%: B2)
+      let selectedCanvas = asset.canvases[0];
+      if (isVisualLoopBridge) {
+        selectedCanvas = sceneAssets[0].canvases[0];
+      } else if (sceneProgress >= 0.75) {
+        selectedCanvas = asset.canvases[3];
+      } else if (sceneProgress >= 0.50) {
+        selectedCanvas = asset.canvases[2];
+      } else if (sceneProgress >= 0.25) {
+        selectedCanvas = asset.canvases[1];
+      }
+
+      // Trigger subtle 60ms cinema flash on scene start or 50% mid-scene photo cut
+      let isFlashCut = false;
+      if (c === 0 && i > 0) isFlashCut = true;
+      if (!triggeredMidFlash && sceneProgress >= 0.50) {
+        triggeredMidFlash = true;
+        isFlashCut = true;
+      }
+
+      const frameLabel = isVisualLoopBridge ? sceneAssets[0].sceneLabel : asset.sceneLabel;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
+      const isCoverFrame = (i === 0 && c === 0);
 
       frameJobs.push({
-        rawPhotoBuffer: framePhotoBuf,
-        blurredBackdropBuffer: frameBackdropBuf,
+        baseCanvasBuffer: selectedCanvas,
         wordsChunk: timedChunks[c].words,
+        activeWordIdx: timedChunks[c].activeWordIdx,
         badgeText,
         sceneLabel: frameLabel,
+        dataCalloutText: asset.dataCallout,
+        coverTitleText: isCoverFrame ? (scriptData.title || '') : '',
+        isFlashCut,
         themeColor,
-        zoomFactor,
         progressRatio,
         outputFramePath: framePath
       });
@@ -721,8 +788,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
-  // Render frames in parallel batches of 12 so CPU finishes in ~3 seconds
-  const BATCH_SIZE = 12;
+  // Render HUD overlays in parallel batches of 16 (super fast since base canvases are pre-built!)
+  const BATCH_SIZE = 16;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
@@ -732,26 +799,24 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(84, 'Unindo áudio Master WAV sample-exact + Loop Infinito Sem Pausa...');
+  onProgress(86, 'Mixando Sound Design de 14 cortes + Áudio Master WAV sem pausa...');
 
-  // Concatenate all scene WAVs sample-by-sample with zero gap or rounding drift
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
 
   const bgMusicWav = path.join(tmpDir, 'bgm.wav');
-  genBgm(bgMusicWav, exactVoiceDur, scriptData.musicMood || 'dark', sceneStartTimes);
+  genBgm(bgMusicWav, exactVoiceDur, scriptData.musicMood || 'dark', sceneStartTimes, midCutTimes);
 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // Single-Pass Encode: Master Frames + Master Voice WAV + BGM/SFX WAV -> Final MP4
   const fpsRate = process.env.VERCEL ? '8' : '25';
   execFileSync(ffmpegPath, [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
-    '-filter_complex', '[1:a]volume=1.40[voice];[2:a]volume=0.36[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
+    '-filter_complex', '[1:a]volume=1.45[voice];[2:a]volume=0.34[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-pix_fmt', 'yuv420p', '-r', fpsRate,
@@ -771,7 +836,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     videoUrl = `data:video/mp4;base64,${b64}`;
   }
 
-  onProgress(100, 'Short finalizado com sincronização exata WordBoundary!');
+  onProgress(100, 'Short Studio 2.0 finalizado!');
 
   return {
     id: jobId,
