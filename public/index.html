@@ -345,21 +345,22 @@
           </select>
         </div>
         <div class="field">
-          <label>Voz Feminina Natural (PT-BR)</label>
+          <label>Narração Humana & Podcast (PT-BR)</label>
           <select id="voiceSelect">
-            <option value="pt-BR-ThalitaMultilingualNeural" selected>👩🎙️ Thalita Ultra-Realista (Humana / Podcast)</option>
-            <option value="en-US-AvaMultilingualNeural">👩🎙️ Ava Multilingual (Suave & Cinematográfica)</option>
-            <option value="en-US-EmmaMultilingualNeural">👩🎙️ Emma Multilingual (Jovem & Conversacional)</option>
-            <option value="pt-BR-FranciscaNeural">👩🎙️ Francisca (Dinâmica Clássica)</option>
-            <option value="pt-BR-AntonioNeural">👨🎙️ Antônio (Masculina Profunda)</option>
+            <option value="duet-podcast" selected>🎙️🔥 Dueto Podcast Viral (Thalita 👩 + Antônio 👨 Interagindo)</option>
+            <option value="pt-BR-ThalitaMultilingualNeural">👩🎙️ Solo: Thalita Ultra-Realista (Humana / Documentário)</option>
+            <option value="en-US-AvaMultilingualNeural">👩🎙️ Solo: Ava Multilingual (Suave & Cinematográfica)</option>
+            <option value="en-US-EmmaMultilingualNeural">👩🎙️ Solo: Emma Multilingual (Jovem & Conversacional)</option>
+            <option value="pt-BR-FranciscaNeural">👩🎙️ Solo: Francisca (Dinâmica Clássica)</option>
+            <option value="pt-BR-AntonioNeural">👨🎙️ Solo: Antônio (Masculina Profunda)</option>
           </select>
         </div>
       </div>
 
       <div class="field custom-topic">
-        <label>Estilo Visual & Edição (Studio 2.0)</label>
+        <label>Estilo Visual & Edição (Studio 3.0)</label>
         <select id="visualStyleSelect">
-          <option value="cinema" selected>🎬 Studio 2.0: Cinema Full-Screen 9:16 + 14 Fotos + Pílula Neon + Dados Reais</option>
+          <option value="cinema" selected>🎬 Studio 3.0: Cinema 9:16 + HUD de Tensão + Color Grading + Pílula Neon</option>
           <option value="card">🖼️ Card Clássico: Moldura Central + Fundo Blur + 14 Cortes</option>
         </select>
       </div>
@@ -454,6 +455,15 @@
           <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem;" onclick="copyField('hashtags')">📋 Copiar Hashtags</button>
         </div>
         <p id="videoTagsDisplay" style="color:var(--primary); font-weight:700; word-break:break-word;"></p>
+      </div>
+
+      <!-- 4. PRIMEIRO COMENTÁRIO FIXADO (GATILHO DE ALGORITMO STUDIO 3.0) -->
+      <div class="meta-box" style="border-color:rgba(255,230,0,0.45); background:rgba(255,230,0,0.06);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="margin:0; color:#ffe600;">💬 1º COMENTÁRIO FIXADO (COLE NO TOPO DOS COMENTÁRIOS)</strong>
+          <button class="btn-secondary" style="padding:4px 10px; font-size:0.72rem; border-color:#ffe600; color:#ffe600;" onclick="copyField('pinnedComment')">📋 Copiar Comentário</button>
+        </div>
+        <p id="videoPinnedDisplay" style="color:#fff8c6; font-size:0.84rem; font-weight:600; line-height:1.45;"></p>
       </div>
     </div>
 
@@ -1010,7 +1020,9 @@
           hashtags = m ? m.join(' ') : '#fatoscuriosos #curiosidades #shorts #fyp';
         }
       }
-      return { title, description, hashtags };
+      const cleanT = (video.sourceTopic || title).replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+      const pinnedComment = video.pinnedComment || `📌 PERGUNTA DO DIA: Por R$ 5 MILHÕES na conta agora, você teria coragem de encarar "${cleanT}" de perto por 10 minutos ou jamais arriscaria? 👇 Comente sua resposta!`;
+      return { title, description, hashtags, pinnedComment };
     }
 
     async function openHistoryVideo(idx) {
@@ -1047,6 +1059,8 @@
       document.getElementById('videoTitleDisplay').textContent = seo.title;
       document.getElementById('videoDescDisplay').textContent = seo.description;
       document.getElementById('videoTagsDisplay').textContent = seo.hashtags;
+      const pinnedEl = document.getElementById('videoPinnedDisplay');
+      if (pinnedEl) pinnedEl.textContent = seo.pinnedComment;
       document.getElementById('videoDurationBadge').textContent = (video.duration || 65) + 's • 9:16 HD • 🔁 Loop';
 
       const lb = video.loopBridge || {
@@ -1065,7 +1079,12 @@
       if (!currentVideoData) return;
       const seo = extractSeoMetadata(currentVideoData);
       const val = seo[field] || '';
-      const labels = { title: '📌 Título copiado!', description: '📝 Descrição copiada!', hashtags: '🏷️ Hashtags copiadas!' };
+      const labels = {
+        title: '📌 Título copiado!',
+        description: '📝 Descrição copiada!',
+        hashtags: '🏷️ Hashtags copiadas!',
+        pinnedComment: '💬 1º Comentário Fixado copiado! Cole no topo dos comentários!'
+      };
       try {
         await navigator.clipboard.writeText(val);
         showToast(labels[field] || 'Copiado!');
