@@ -265,22 +265,16 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 
   const extractBestVideoDerivative = (pageObj) => {
     const derivs = pageObj?.videoinfo?.[0]?.derivatives || [];
-    // Prefer 360p.mpeg4.mov (ultra-fast hardware/software decode in FFmpeg) or 480p.vp9.webm / 240p.vp9.webm
+    // Strictly use 360p.mpeg4.mov (decodes in 2.4s in FFmpeg C++, whereas VP9 .webm takes 14s!)
     const mpeg4 = derivs.find(d => d.src && d.transcodekey === '360p.mpeg4.mov');
-    if (mpeg4) return mpeg4.src;
-    const vp9_480 = derivs.find(d => d.src && d.transcodekey === '480p.vp9.webm');
-    if (vp9_480) return vp9_480.src;
-    const vp9_240 = derivs.find(d => d.src && d.transcodekey === '240p.vp9.webm');
-    if (vp9_240) return vp9_240.src;
-    const anySmall = derivs.find(d => d.src && d.height >= 240 && d.height <= 720);
-    return anySmall ? anySmall.src : null;
+    return mpeg4 ? mpeg4.src : null;
   };
 
   await Promise.allSettled([
     // 2A. Topic-Specific Real Videos
     (async () => {
       const u1 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(topicVideoQuery)}&gsrlimit=20&prop=videoinfo&viprop=derivatives&format=json`;
-      const r1 = await fetch(u1, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      const r1 = await fetch(u1, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
       if (r1.ok) {
         const d1 = await r1.json();
         for (const p of Object.values(d1.query?.pages || {})) {
@@ -292,7 +286,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     // 2B. Atmosphere-Specific Cinematic Real Videos
     (async () => {
       const u2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(themeVideoQuery)}&gsrlimit=30&prop=videoinfo&viprop=derivatives&format=json`;
-      const r2 = await fetch(u2, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      const r2 = await fetch(u2, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
       if (r2.ok) {
         const d2 = await r2.json();
         for (const p of Object.values(d2.query?.pages || {})) {
@@ -304,7 +298,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     // 2C. Backup 4K Drone/Nature Real Videos
     (async () => {
       const u3 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(backupDroneQuery)}&gsrlimit=25&prop=videoinfo&viprop=derivatives&format=json`;
-      const r3 = await fetch(u3, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      const r3 = await fetch(u3, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
       if (r3.ok) {
         const d3 = await r3.json();
         for (const p of Object.values(d3.query?.pages || {})) {
@@ -315,7 +309,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     })()
   ]);
 
-  // Guaranteed high-cinema real camera/drone .mov backup bank (100% HTTP-200 verified 1.4MB - 3.5MB clips!)
+  // Guaranteed high-cinema real camera/drone .mov backup bank (100% HTTP-200 verified 1.4MB - 3.5MB mpeg4.mov clips!)
   const verifiedRealCameraClips = [
     'https://upload.wikimedia.org/wikipedia/commons/transcoded/5/53/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm.360p.mpeg4.mov',
     'https://upload.wikimedia.org/wikipedia/commons/transcoded/1/11/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm.360p.mpeg4.mov',
@@ -324,24 +318,23 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   for (const vUrl of verifiedRealCameraClips) addVideoCandidate(vUrl, 'verified_real_camera_footage');
 
   const enTitle = enTitleClean || enTitleFull;
-  console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov/.webm) encontrados!`);
+  console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov) encontrados!`);
 
-  // Assign 4 candidate real video URLs per take + 1 guaranteed fast (<3.5MB) real camera/drone clip
+  // Assign 3 candidate real .mov URLs per take + 1 guaranteed fast (<3.5MB) real camera/drone .mov clip
   let vCursor = 0;
   return scenes.map((_, sIdx) => {
     const guaranteedFastReal = verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length];
     if (pool.length === 0) return { videoQueue: [guaranteedFastReal] };
     const primary = pool[vCursor % pool.length].url;
-    const backup1 = pool[(vCursor + 5) % pool.length].url;
-    const backup2 = pool[(vCursor + 11) % pool.length].url;
+    const backup1 = pool[(vCursor + 4) % pool.length].url;
     vCursor++;
     return {
-      videoQueue: [primary, backup1, backup2, guaranteedFastReal]
+      videoQueue: [primary, backup1, guaranteedFastReal]
     };
   });
 }
 
-// Downloads a real .mov/.webm video clip to disk (validates binary container header & skips >5.5MB files so every clip downloads in <0.5s!)
+// Downloads a real .mov video clip to disk (strictly validates native QuickTime/MP4 container header & skips >4.8MB files so FFmpeg decodes in 2.4s!)
 async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, sceneIdx = 0) {
   for (const vidUrl of videoQueue) {
     if (!vidUrl) continue;
@@ -350,25 +343,23 @@ async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, scen
         headers: {
           'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)'
         },
-        signal: AbortSignal.timeout(2200)
+        signal: AbortSignal.timeout(2000)
       });
       if (r.ok) {
         const contentLen = parseInt(r.headers.get('content-length') || '0', 10);
-        if (contentLen > 5500000) {
+        if (contentLen > 4800000) {
           try { await r.body?.cancel(); } catch (e) {}
           continue;
         }
         const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 80000 && buf.length <= 5500000) {
-          // Validate binary video container header (.mov/.mp4 'ftyp'/'moov'/'wide' or .webm EBML 0x1a 0x45)
+        if (buf.length > 80000 && buf.length <= 4800000) {
+          // Strictly validate QuickTime/MP4 .mov header ('ftyp'/'moov'/'wide'/'mdat') — never allow slow VP9 WebM!
           const boxType = buf.slice(4, 8).toString('ascii');
           const isMov = (boxType === 'ftyp' || boxType === 'moov' || boxType === 'wide' || boxType === 'mdat');
-          const isWebm = (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3);
-          const isOgg = (buf.slice(0, 4).toString('ascii') === 'OggS');
-          if (isMov || isWebm || isOgg) {
+          if (isMov) {
             fs.writeFileSync(outputClipPath, buf);
             const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
-            console.log(`🎥 [Take ${sceneIdx + 1}] VÍDEO REAL baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
+            console.log(`🎥 [Take ${sceneIdx + 1}] VÍDEO REAL (.mov) baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
             return outputClipPath;
           }
         }
@@ -575,7 +566,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Ultra-Fast Transparent PNG Subtitle Strip Renderer (480x360px — renders all 100 subtitle steps in 0.25s!)
+// Ultra-Fast Transparent PNG Subtitle Strip Renderer (480x220px — renders all 100 subtitle steps in 0.18s!)
 async function renderCaptionedFrame({
   wordsChunk,
   activeWordIdx = 0,
@@ -583,21 +574,21 @@ async function renderCaptionedFrame({
   progressRatio,
   outputFramePath
 }) {
-  const STRIP_H = 360;
+  const STRIP_H = 220;
   const pal = palette || getAtmospherePalette('cosmic');
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
 
-  let fontSize = 36;
-  if (maxCharsInAnyLine >= 18) fontSize = 23;
-  else if (maxCharsInAnyLine >= 15) fontSize = 26;
-  else if (maxCharsInAnyLine >= 13) fontSize = 30;
-  else if (maxCharsInAnyLine >= 11) fontSize = 33;
+  let fontSize = 35;
+  if (maxCharsInAnyLine >= 18) fontSize = 22;
+  else if (maxCharsInAnyLine >= 15) fontSize = 25;
+  else if (maxCharsInAnyLine >= 13) fontSize = 29;
+  else if (maxCharsInAnyLine >= 11) fontSize = 32;
 
-  const lineSpacing = Math.round(fontSize * 1.42);
-  // Local Y inside the 480x360 bottom strip (placed at y=494 on the 480x854 video)
-  const baseStartY = wrappedLines.length === 1 ? 98 : (wrappedLines.length === 2 ? 75 : 54);
+  const lineSpacing = Math.round(fontSize * 1.40);
+  // Local Y inside the 480x220 bottom strip (placed at y=634 on the 480x854 video)
+  const baseStartY = wrappedLines.length === 1 ? 82 : (wrappedLines.length === 2 ? 62 : 44);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
@@ -606,7 +597,7 @@ async function renderCaptionedFrame({
 
   const progressWidth = Math.max(10, Math.round(WIDTH * progressRatio));
 
-  // Transparent 480x360 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
+  // Transparent 480x220 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
   const hudSvg = `<svg width="${WIDTH}" height="${STRIP_H}" xmlns="http://www.w3.org/2000/svg">
     <g>
       ${subtitleLinesSvg}
@@ -792,8 +783,9 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
 
   const filterComplex = [
     vChains,
-    `[v0][v1][v2]concat=n=3:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=494:w=${WIDTH}:h=360:color=black@0.36:t=fill[bg]`,
-    `[bg][3:v]overlay=0:494:format=yuv420:shortest=1[vout]`,
+    `[v0][v1][v2]concat=n=3:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=634:w=${WIDTH}:h=220:color=black@0.36:t=fill[bg]`,
+    `[3:v]format=yuva420p[subs]`,
+    `[bg][subs]overlay=0:634:format=yuv420:shortest=1[vout]`,
     `[4:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice]`,
     `[5:a]volume=0.33[bgm]`,
     `[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
