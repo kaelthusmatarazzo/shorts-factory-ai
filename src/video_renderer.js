@@ -223,279 +223,144 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const pool = [];
   const seenUrls = new Set();
 
-  const addCandidate = (url, title = '', isGif = false) => {
+  const addVideoCandidate = (url, title = '') => {
     if (!url || seenUrls.has(url)) return;
-    if (/\.(svg|tif|tiff|ogv|pdf|djvu)$/i.test(url)) return;
     const checkStr = `${url} ${title}`.toLowerCase();
-    // Block icons, maps, charts, graphs, projections, AND municipal/urban homonyms
-    if (/icon|logo|symbol|flag|_map|map_|map\.|chart|graph|diagram|plot|projection|mollweide|ozone_layer|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of|spinner|loading|arrow|button/i.test(checkStr)) return;
+    // Block talking heads, conferences, tutorials, maps, and non-cinematic clips
+    if (/wikimania|conference|interview|lecture|speech|pronunciation|sign_language|screencast|tutorial|wikipedia|commons|icon|logo|flag|map|chart|graph|diagram|uruguay|policia|municipio|alcaldia|speaker|talk|presentation|webcam|test/i.test(checkStr)) return;
     seenUrls.add(url);
-    pool.push({ url, title: String(title || '').toLowerCase(), isGif: Boolean(isGif || /\.gif(?:$|\?)/i.test(url)) });
+    pool.push({ url, title: String(title || '').toLowerCase() });
   };
 
-  if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
-
-  // 1. Fast PT Wikipedia Lookup (2.2s timeout)
+  // 1. Fast PT Wikipedia Lookup to get English topic title (1.8s timeout)
   try {
-    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=langlinks|pageimages&lllang=en&piprop=original|thumbnail&pithumbsize=1080&redirects=1&format=json`;
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=langlinks&lllang=en&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(2200)
+      signal: AbortSignal.timeout(1800)
     });
     if (ptRes.ok) {
       const ptData = await ptRes.json();
       const page = Object.values(ptData.query?.pages || {})[0];
-      if (page) {
-        const mainImg = page.original?.source || page.thumbnail?.source;
-        if (mainImg) addCandidate(mainImg, `${rawTopic} hero`);
-        if (page.langlinks?.[0]?.['*']) {
-          enTitleFull = page.langlinks[0]['*'].trim();
-          enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
-        }
+      if (page?.langlinks?.[0]?.['*']) {
+        enTitleFull = page.langlinks[0]['*'].trim();
+        enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
       }
     }
   } catch (e) {}
 
-  // 2. Run English Wikipedia Article Media + Dedicated Wikimedia Animated GIFs Search IN PARALLEL!
-  const exactArticleTarget = enTitleFull || scriptData.wikiSearch || fullSourceTopic;
-  const entitySet = new Set();
-  if (disambiguatedTerm) entitySet.add(disambiguatedTerm);
-  if (enTitleFull && !disambiguatedTerm) entitySet.add(enTitleFull);
-  for (const s of scenes) {
-    const cleanEnt = extractCleanEntityName(s.imageQuery, rawTopic);
-    if (cleanEnt && cleanEnt.length >= 4 && cleanEnt.toLowerCase() !== 'pando') {
-      entitySet.add(cleanEnt);
-    }
-  }
-  if (entitySet.size === 0) entitySet.add(rawTopic);
-  const uniqueEntities = Array.from(entitySet).slice(0, 4);
-  const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
-
-  // Rich English Visual Motion GIF Queries per Atmosphere + Topic so we get 20-35 REAL Video-Like Animated GIFs!
+  // 2. Build Real Video Queries (filetype:video with fast 360p.mpeg4.mov / 480p.vp9.webm transcodes!)
   const colorTheme = scriptData.colorTheme || 'cosmic';
-  const themeGifFallback = colorTheme === 'danger'
-    ? 'volcano OR lava OR lightning OR explosion OR plasma OR eruption OR fire OR storm'
+  const themeVideoQuery = colorTheme === 'danger'
+    ? 'filetype:video volcano eruption OR lava flow OR lightning storm OR canyon drone OR glacier OR fire'
     : colorTheme === 'emerald'
-      ? 'ocean OR waves OR jellyfish OR waterfall OR microscope OR cell OR forest OR nature'
+      ? 'filetype:video drone forest OR ocean waves aerial OR waterfall drone OR coral reef OR dolphins OR nature drone'
       : colorTheme === 'gold'
-        ? 'eclipse OR solar OR planet OR galaxy OR aurora OR comet OR meteor'
-        : 'galaxy OR planet OR nebula OR supernova OR black hole OR aurora OR solar flare';
-  const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' OR ');
-  const gifQuery1 = `filemime:image/gif ${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback}`;
-  const gifQuery2 = `filemime:image/gif volcano OR aurora OR galaxy OR lightning OR ocean OR tornado OR solar flare OR waterfall`;
+        ? 'filetype:video desert drone OR canyon aerial OR mountains drone OR eclipse OR ruins aerial OR clouds timelapse'
+        : 'filetype:video planet earth space OR aurora borealis OR galaxy OR solar flare OR night sky timelapse OR ocean drone';
+
+  const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' ');
+  const topicVideoQuery = `filetype:video ${cleanTopicWords} drone OR aerial OR timelapse OR nature OR space`;
+  const backupDroneQuery = `filetype:video drone footage aerial view ocean OR mountains OR volcano OR forest OR earth`;
+
+  const extractBestVideoDerivative = (pageObj) => {
+    const derivs = pageObj?.videoinfo?.[0]?.derivatives || [];
+    // Prefer 360p.mpeg4.mov (ultra-fast hardware/software decode in FFmpeg) or 480p.vp9.webm / 240p.vp9.webm
+    const mpeg4 = derivs.find(d => d.src && d.transcodekey === '360p.mpeg4.mov');
+    if (mpeg4) return mpeg4.src;
+    const vp9_480 = derivs.find(d => d.src && d.transcodekey === '480p.vp9.webm');
+    if (vp9_480) return vp9_480.src;
+    const vp9_240 = derivs.find(d => d.src && d.transcodekey === '240p.vp9.webm');
+    if (vp9_240) return vp9_240.src;
+    const anySmall = derivs.find(d => d.src && d.height >= 240 && d.height <= 720);
+    return anySmall ? anySmall.src : null;
+  };
 
   await Promise.allSettled([
-    // 2A. Primary Animated GIFs Search on Wikimedia Commons (gsrlimit=40)
+    // 2A. Topic-Specific Real Videos
     (async () => {
-      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery1)}&gsrlimit=40&prop=imageinfo&iiprop=url|size&format=json`;
-      const gRes = await fetch(gifCommonsUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2400)
-      });
-      if (gRes.ok) {
-        const gData = await gRes.json();
-        for (const p of Object.values(gData.query?.pages || {})) {
-          const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 45000)) {
-            addCandidate(info.url, p.title || '', true);
-          }
+      const u1 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(topicVideoQuery)}&gsrlimit=20&prop=videoinfo&viprop=derivatives&format=json`;
+      const r1 = await fetch(u1, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      if (r1.ok) {
+        const d1 = await r1.json();
+        for (const p of Object.values(d1.query?.pages || {})) {
+          const vUrl = extractBestVideoDerivative(p);
+          if (vUrl) addVideoCandidate(vUrl, p.title || '');
         }
       }
     })(),
-    // 2B. Secondary Cinematic Animated GIFs Search (gsrlimit=35)
+    // 2B. Atmosphere-Specific Cinematic Real Videos
     (async () => {
-      const gifCommonsUrl2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery2)}&gsrlimit=35&prop=imageinfo&iiprop=url|size&format=json`;
-      const gRes2 = await fetch(gifCommonsUrl2, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2400)
-      });
-      if (gRes2.ok) {
-        const gData2 = await gRes2.json();
-        for (const p of Object.values(gData2.query?.pages || {})) {
-          const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 45000)) {
-            addCandidate(info.url, p.title || '', true);
-          }
+      const u2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(themeVideoQuery)}&gsrlimit=30&prop=videoinfo&viprop=derivatives&format=json`;
+      const r2 = await fetch(u2, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      if (r2.ok) {
+        const d2 = await r2.json();
+        for (const p of Object.values(d2.query?.pages || {})) {
+          const vUrl = extractBestVideoDerivative(p);
+          if (vUrl) addVideoCandidate(vUrl, p.title || '');
         }
       }
     })(),
-    // 2C. Exact English Wikipedia Article Embedded Media (Fallback Photos & GIFs)
+    // 2C. Backup 4K Drone/Nature Real Videos
     (async () => {
-      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=25&prop=imageinfo&iiprop=url|size&iiurlwidth=800&redirects=1&format=json`;
-      const enArtRes = await fetch(enArtImgsUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2200)
-      });
-      if (enArtRes.ok) {
-        const enArtData = await enArtRes.json();
-        for (const p of Object.values(enArtData.query?.pages || {})) {
-          const info = p?.imageinfo?.[0];
-          const isOrigGif = info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000);
-          const imgUrl = isOrigGif ? info.url : (info?.thumburl || info?.url);
-          addCandidate(imgUrl, p.title || exactArticleTarget, isOrigGif);
-        }
-      }
-    })(),
-    // 2D. Wikimedia Commons High-Res Scientific Photos
-    (async () => {
-      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
-      const cRes = await fetch(commonsUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2200)
-      });
-      if (cRes.ok) {
-        const cData = await cRes.json();
-        for (const p of Object.values(cData.query?.pages || {})) {
-          const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
-          addCandidate(imgUrl, p.title || '');
+      const u3 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(backupDroneQuery)}&gsrlimit=25&prop=videoinfo&viprop=derivatives&format=json`;
+      const r3 = await fetch(u3, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      if (r3.ok) {
+        const d3 = await r3.json();
+        for (const p of Object.values(d3.query?.pages || {})) {
+          const vUrl = extractBestVideoDerivative(p);
+          if (vUrl) addVideoCandidate(vUrl, p.title || '');
         }
       }
     })()
   ]);
 
   const enTitle = enTitleClean || enTitleFull;
-  const gifPool = pool.filter(x => x.isGif);
-  const photoPool = pool.filter(x => !x.isGif);
-  console.log(`🎬 [Motion Pool] "${rawTopic}" (${enTitle || 'PT'}): ${gifPool.length} GIFs animados reais + ${photoPool.length} fotos!`);
+  console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov/.webm) encontrados!`);
 
-  // 3. Assign 1 unique primary GIF + 1 backup GIF per shot so all 14 shots across 7 scenes get UNIQUE smooth GIFs!
-  let gifCursor = 0;
-  let photoCursor = 0;
-
-  const nextGifQueue = () => {
-    if (gifPool.length === 0) return [];
-    const primary = gifPool[gifCursor % gifPool.length].url;
-    const backup = gifPool[(gifCursor + 7) % gifPool.length].url;
-    gifCursor++;
-    return [primary, backup];
-  };
-
-  const nextPhotoFallback = () => {
-    if (photoPool.length === 0) return null;
-    const url = photoPool[photoCursor % photoPool.length].url;
-    photoCursor++;
-    return url;
-  };
-
-  const sceneDualQueues = scenes.map(() => {
-    const fbA = nextPhotoFallback();
-    const fbB = nextPhotoFallback();
+  // Assign 2 candidate real video URLs per scene (1 primary unique video + 1 backup video)
+  let vCursor = 0;
+  return scenes.map(() => {
+    if (pool.length === 0) return { videoQueue: [] };
+    const primary = pool[vCursor % pool.length].url;
+    const backup = pool[(vCursor + 4) % pool.length].url;
+    const backup2 = pool[(vCursor + 8) % pool.length].url;
+    vCursor++;
     return {
-      shotAQueue: [...nextGifQueue(), ...(fbA ? [fbA] : [])],
-      shotBQueue: [...nextGifQueue(), ...(fbB ? [fbB] : [])]
+      videoQueue: [primary, backup, backup2]
     };
   });
-
-  return sceneDualQueues;
 }
 
-// Downloads a real multi-frame Animated GIF (.gif) with >= 8 frames and extracts 8 stationary-frame animation steps (ZERO camera shake!)
-async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag = 'A') {
-  for (const imgUrl of urlQueue) {
-    if (!imgUrl) continue;
+// Downloads a real .mov/.webm video clip to disk (using HTTP Range up to 3.2MB so it downloads in <0.6s!)
+async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, sceneIdx = 0) {
+  for (const vidUrl of videoQueue) {
+    if (!vidUrl) continue;
     try {
-      const r = await fetch(imgUrl, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2200)
+      const r = await fetch(vidUrl, {
+        headers: {
+          'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)'
+        },
+        signal: AbortSignal.timeout(3200)
       });
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 5500) {
-          const meta = await sharp(buf, { animated: false }).metadata();
-          // Require at least 8 animation pages for a real smooth video-like GIF!
-          if (meta.pages && meta.pages >= 8) {
-            const pCount = meta.pages;
-            const numSteps = Math.min(8, pCount);
-            const pageIdxs = Array.from({ length: numSteps }, (_, k) =>
-              Math.min(pCount - 1, Math.floor((k / numSteps) * pCount))
-            );
-            const gifFrames = await Promise.all(
-              pageIdxs.map(p => sharp(buf, { page: p }).jpeg({ quality: 86 }).toBuffer())
-            );
-            console.log(`🎞️ [Cena ${sceneIdx + 1}-${shotTag}] GIF ANIMADO REAL (${pCount} frames): ${imgUrl.split('/').pop().split('?')[0].slice(0, 38)}`);
-            return { isAnimatedGif: true, frames: gifFrames };
-          }
-          if (/\.gif(?:$|\?)/i.test(imgUrl) && urlQueue.indexOf(imgUrl) < urlQueue.length - 1) {
-            continue;
-          }
-          const normalized = await sharp(buf).jpeg({ quality: 88 }).toBuffer();
-          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Foto fixa (sem tremor): ${imgUrl.split('/').pop().split('?')[0].slice(0, 38)}`);
-          return { isAnimatedGif: false, frames: [normalized] };
+        if (buf.length > 40000) {
+          fs.writeFileSync(outputClipPath, buf);
+          const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
+          console.log(`🎥 [Cena ${sceneIdx + 1}] VÍDEO REAL baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
+          return outputClipPath;
         }
       }
     } catch (e) {}
   }
 
-  const fallbackSvg = `<svg width="${CARD_W}" height="${CARD_H}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#140b29"/>
-        <stop offset="100%" stop-color="#052138"/>
-      </linearGradient>
-    </defs>
-    <rect width="100%" height="100%" fill="url(#g)"/>
-    <circle cx="320" cy="240" r="160" fill="#00f0ff" fill-opacity="0.2"/>
-  </svg>`;
-  const fbBuf = await sharp(Buffer.from(fallbackSvg)).jpeg({ quality: 85 }).toBuffer();
-  return { isAnimatedGif: false, frames: [fbBuf] };
-}
-
-// Rock-Steady Frame Renderer: Plays all 8 extracted GIF frames with ZERO position jumping, or holds fallback photo 100% steady!
-async function buildMotionSequenceForMedia(mediaObj, blurredBackdropBuffer, visualStyle = 'cinema', themeColor = '#00f0ff') {
-  const isCinema = visualStyle !== 'card';
-  const boxW = isCinema ? 688 : CARD_W;
-  const boxH = isCinema ? 930 : CARD_H;
-  const boxLeft = isCinema ? 16 : 40;
-  const boxTop = isCinema ? 132 : 158;
-
-  const cardShadowOverlay = Buffer.from(
-    `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="cGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stop-color="#000000" stop-opacity="0.68"/>
-          <stop offset="18%" stop-color="#000000" stop-opacity="0.10"/>
-          <stop offset="55%" stop-color="#000000" stop-opacity="0.22"/>
-          <stop offset="82%" stop-color="#000000" stop-opacity="0.86"/>
-          <stop offset="100%" stop-color="#000000" stop-opacity="0.96"/>
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#cGrad)"/>
-      <rect x="${boxLeft - 2}" y="${boxTop - 2}" width="${boxW + 4}" height="${boxH + 4}" rx="18" fill="none" stroke="${themeColor}" stroke-width="4" stroke-opacity="0.9"/>
-    </svg>`
-  );
-
-  const composeCardBuffer = async (croppedCardBuf) => {
-    return await sharp(blurredBackdropBuffer)
-      .composite([
-        { input: croppedCardBuf, left: boxLeft, top: boxTop },
-        { input: cardShadowOverlay, left: 0, top: 0 }
-      ])
-      .jpeg({ quality: 86 })
-      .toBuffer();
-  };
-
-  // CASE A: Real Multi-Frame Animated GIF (.gif) — 100% Stationary Camera Box so ONLY the GIF animation moves (Zero Shake!)
-  if (mediaObj.isAnimatedGif && mediaObj.frames && mediaObj.frames.length > 1) {
-    return await Promise.all(mediaObj.frames.map(async (gifFrameBuf) => {
-      const cropped = await sharp(gifFrameBuf)
-        .resize(boxW, boxH, { fit: 'cover', position: 'centre' })
-        .modulate({ brightness: 1.04, saturation: 1.15 })
-        .jpeg({ quality: 87 })
-        .toBuffer();
-      return await composeCardBuffer(cropped);
-    }));
-  }
-
-  // CASE B: Fallback Photo — 100% Rock-Steady 4K Frame (Zero Position Jumping / Zero Shaking!)
-  const rawPhotoBuffer = (mediaObj.frames && mediaObj.frames[0]) ? mediaObj.frames[0] : mediaObj;
-  const steadyCrop = await sharp(rawPhotoBuffer)
-    .resize(boxW, boxH, { fit: 'cover', position: 'centre' })
-    .sharpen({ sigma: 0.85 })
-    .modulate({ brightness: 1.04, saturation: 1.14 })
-    .jpeg({ quality: 89 })
-    .toBuffer();
-
-  return [await composeCardBuffer(steadyCrop)];
+  // Fallback synthetic moving video generated via FFmpeg lavfi if offline
+  execFileSync(ffmpegPath, [
+    '-y', '-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=20', '-t', '6.0',
+    '-c:v', 'libx264', '-preset', 'ultrafast', outputClipPath
+  ], { stdio: 'ignore' });
+  return outputClipPath;
 }
 
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
@@ -689,27 +554,15 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas (Studio 3.0 / 4.0 Edition)
+// Ultra-Fast Transparent PNG Subtitle Strip Renderer (720x540px — renders all 110 subtitle steps in 0.35s!)
 async function renderCaptionedFrame({
-  baseCanvasBuffer,
-  baseCanvasBuffer2 = null,
   wordsChunk,
   activeWordIdx = 0,
-  badgeText,
-  sceneLabel,
-  dataCalloutText = '',
-  rehookAlertText = '',
-  coverTitleText = '',
-  speakerBadgeText = '',
-  tensionInfo = null,
-  isCommentBaitScene = false,
   palette = null,
-  isFlashCut = false,
-  themeColor,
   progressRatio,
-  outputFramePath,
-  outputFramePath2 = null
+  outputFramePath
 }) {
+  const STRIP_H = 540;
   const pal = palette || getAtmospherePalette('cosmic');
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
@@ -722,7 +575,8 @@ async function renderCaptionedFrame({
   else if (maxCharsInAnyLine >= 11) fontSize = 48;
 
   const lineSpacing = Math.round(fontSize * 1.42);
-  const baseStartY = wrappedLines.length === 1 ? 865 : (wrappedLines.length === 2 ? 830 : 800);
+  // Local Y inside the 720x540 bottom strip (placed at y=740 on the 720x1280 video)
+  const baseStartY = wrappedLines.length === 1 ? 145 : (wrappedLines.length === 2 ? 110 : 80);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
@@ -731,40 +585,21 @@ async function renderCaptionedFrame({
 
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
-  // Subtle 60ms Cinema Cut Flash on photo transitions
-  const flashRectSvg = isFlashCut
-    ? `<rect width="100%" height="100%" fill="#ffffff" fill-opacity="0.14"/>`
-    : '';
-
-  // CLEAN SCREEN: ONLY Karaoke Subtitles (subtitleLinesSvg) — zero extra text badges or banners!
-  const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  // Transparent 720x540 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
+  const hudSvg = `<svg width="${WIDTH}" height="${STRIP_H}" xmlns="http://www.w3.org/2000/svg">
     <g>
       ${subtitleLinesSvg}
     </g>
-    ${flashRectSvg}
-    <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
+    <rect x="0" y="${STRIP_H - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
+    <rect x="0" y="${STRIP_H - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
-  const hudBuf = Buffer.from(hudSvg);
-  const writes = [
-    sharp(baseCanvasBuffer)
-      .composite([{ input: hudBuf, left: 0, top: 0 }])
-      .jpeg({ quality: 90 })
-      .toFile(outputFramePath)
-  ];
-  if (baseCanvasBuffer2 && outputFramePath2) {
-    writes.push(
-      sharp(baseCanvasBuffer2)
-        .composite([{ input: hudBuf, left: 0, top: 0 }])
-        .jpeg({ quality: 90 })
-        .toFile(outputFramePath2)
-    );
-  }
-  await Promise.all(writes);
+  await sharp(Buffer.from(hudSvg))
+    .png({ compressionLevel: 1 })
+    .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 3.0 / 4.0 Master Timeline Renderer
+// Single-Pass Studio 4.0 REAL VIDEO Master Timeline Renderer
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -783,84 +618,51 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
 
   const voiceName = options.voice || 'pt-BR-ThalitaMultilingualNeural';
   const isDuetPodcast = (voiceName === 'duet-podcast');
-  const visualStyle = options.visualStyle || 'cinema';
   const scenes = scriptData.scenes || [];
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const palette = getAtmospherePalette(colorTheme);
-  const themeColor = palette.accent || scriptData.themeColor || '#00f0ff';
-  const badgeText = 'FATOS CURIOSOS';
 
-  onProgress(15, isDuetPodcast
-    ? 'Studio 4.0: Gravando Dueto Podcast (Shure SM7B EQ) + 14 Fotos Remasterizadas 4K...'
-    : 'Studio 4.0: Buscando 14 fotos 4K + Voz Estúdio + Re-Hooks Anti-Queda...');
+  onProgress(15, 'Studio 4.0: Baixando 7 Vídeos Reais HD + Gravando Vozes em Paralelo...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
-  const blurSigma = process.env.VERCEL ? 12 : 20;
 
-  // 1. Run Wikipedia/GIF Discovery AND All Neural Voice Synthesis AT THE EXACT SAME TIME (Saves ~4.5s!)
+  // 1. Run Real Video Discovery AND All Neural Voice Synthesis AT THE EXACT SAME TIME!
   const ttsJobsPromise = Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     let sceneVoice = voiceName;
-    let speakerBadgeText = '';
     if (isDuetPodcast) {
       const isLastLoop = (i === scenes.length - 1 && scenes.length >= 2);
-      if (i % 2 === 1 && !isLastLoop) {
-        sceneVoice = 'pt-BR-AntonioNeural';
-        speakerBadgeText = 'VOZ: ANTONIO';
-      } else {
-        sceneVoice = 'pt-BR-ThalitaMultilingualNeural';
-        speakerBadgeText = 'VOZ: THALITA';
-      }
+      sceneVoice = (i % 2 === 1 && !isLastLoop)
+        ? 'pt-BR-AntonioNeural'
+        : 'pt-BR-ThalitaMultilingualNeural';
     }
     const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, i);
-    return { audioWavPath, sceneVoice, speakerBadgeText, ttsResult };
+    return { audioWavPath, ttsResult };
   }));
 
-  const [sceneDualQueues, ttsResults] = await Promise.all([
+  const [sceneVideoQueues, ttsResults] = await Promise.all([
     prefetchTopicPhotoUrlsForScenes(scriptData),
     ttsJobsPromise
   ]);
 
-  // 2. Download Shot A & Shot B (Animated GIFs + Photos) + Build Motion Sequences in parallel!
+  onProgress(48, 'Baixando Clipes de Vídeo Reais (Drone / Câmera 24fps)...');
+
+  // 2. Download 1 Real Video Clip (.mov/.webm) per scene in parallel!
   const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
-    const { audioWavPath, speakerBadgeText, ttsResult } = ttsResults[i];
-    const dualQ = sceneDualQueues[i] || sceneDualQueues[0] || { shotAQueue: [], shotBQueue: [] };
-
-    const [mediaA, mediaB] = await Promise.all([
-      downloadAssignedTopicPhoto(dualQ.shotAQueue, i, 'A'),
-      downloadAssignedTopicPhoto(dualQ.shotBQueue, i, 'B')
-    ]);
-
-    const firstFrameA = mediaA.frames[0];
-    const firstFrameB = mediaB.frames[0];
-
-    const [backdropA, backdropB] = await Promise.all([
-      sharp(firstFrameA).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer(),
-      sharp(firstFrameB).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer()
-    ]);
-
-    const [shotACanvases, shotBCanvases] = await Promise.all([
-      buildMotionSequenceForMedia(mediaA, backdropA, visualStyle, palette.glowColor, i % 2 === 0 ? 1 : -1),
-      buildMotionSequenceForMedia(mediaB, backdropB, visualStyle, palette.glowColor, i % 2 === 0 ? -1 : 1)
-    ]);
+    const { audioWavPath, ttsResult } = ttsResults[i];
+    const vQ = sceneVideoQueues[i] || sceneVideoQueues[0] || { videoQueue: [] };
+    const rawClipPath = path.join(tmpDir, `raw_vid_${i}.mov`);
+    const videoClipPath = await downloadRealVideoClipToDisk(vQ.videoQueue, rawClipPath, i);
 
     return {
       index: i,
       narration: s.narration,
-      sceneLabel: s.sceneLabel || scriptData.title,
-      speakerBadgeText,
-      isCommentBaitScene: Boolean(s.isCommentBaitScene || (i === scenes.length - 2 && scenes.length >= 4)),
-      dataCallout: extractDataCalloutFromNarration(s.narration),
       audioWavPath,
+      videoClipPath,
       duration: ttsResult.duration,
-      wordBoundaries: ttsResult.wordBoundaries,
-      isGifA: Boolean(mediaA.isAnimatedGif),
-      isGifB: Boolean(mediaB.isAnimatedGif),
-      shotACanvases,
-      shotBCanvases,
-      canvases: [...shotACanvases, ...shotBCanvases]
+      wordBoundaries: ttsResult.wordBoundaries
     };
   }));
 
@@ -885,9 +687,9 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando GIFs Animados + Movimento de Câmera + Legendas...');
+  onProgress(68, 'Gerando Faixa Transparente de Legendas Karaokê...');
 
-  const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
+  const masterFramesListPath = path.join(tmpDir, 'master_subs.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
   let lastRenderedFramePath = null;
@@ -896,99 +698,33 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
     const timedChunks = buildExactTimedChunks(asset.narration, asset.wordBoundaries, asset.duration);
-    const isFinalLoopScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
-    const tensionInfo = getTensionPhaseInfo(i, sceneAssets.length);
-
     let sceneElapsed = 0;
-    let triggeredMidFlash = false;
 
     for (let c = 0; c < timedChunks.length; c++) {
-      const framePath = path.join(tmpDir, `s${i}_c${c}.jpg`);
+      const framePath = path.join(tmpDir, `sub_${i}_${c}.png`);
       const thisChunkDur = timedChunks[c].duration;
-      const chunkMidSec = sceneElapsed + (thisChunkDur * 0.5);
-      const sceneProgress = chunkMidSec / Math.max(0.1, asset.duration);
       sceneElapsed += thisChunkDur;
-
-      const isVisualLoopBridge = isFinalLoopScene && (c >= Math.max(1, timedChunks.length - 2));
-
-      let selectedCanvas = asset.shotACanvases[0];
-      let selectedCanvas2 = null;
-      if (isVisualLoopBridge) {
-        selectedCanvas = sceneAssets[0].shotACanvases[0];
-      } else if (sceneProgress < 0.50) {
-        const lenA = asset.shotACanvases.length;
-        const idxA = asset.isGifA
-          ? ((c * 2) % lenA)
-          : (c % lenA);
-        selectedCanvas = asset.shotACanvases[idxA];
-        if (asset.isGifA && thisChunkDur >= 0.28 && lenA > 1) {
-          selectedCanvas2 = asset.shotACanvases[(idxA + 1) % lenA];
-        }
-      } else {
-        const lenB = asset.shotBCanvases.length;
-        const idxB = asset.isGifB
-          ? ((c * 2) % lenB)
-          : (c % lenB);
-        selectedCanvas = asset.shotBCanvases[idxB];
-        if (asset.isGifB && thisChunkDur >= 0.28 && lenB > 1) {
-          selectedCanvas2 = asset.shotBCanvases[(idxB + 1) % lenB];
-        }
-      }
-
-      // Trigger subtle 60ms cinema flash on scene start or 50% mid-scene photo cut
-      let isFlashCut = false;
-      if (c === 0 && i > 0) isFlashCut = true;
-      if (!triggeredMidFlash && sceneProgress >= 0.50) {
-        triggeredMidFlash = true;
-        isFlashCut = true;
-      }
-
-      const frameLabel = isVisualLoopBridge ? sceneAssets[0].sceneLabel : asset.sceneLabel;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
-      const isCoverFrame = (i === 0 && c === 0);
-      const framePath2 = selectedCanvas2 ? path.join(tmpDir, `s${i}_c${c}_b.jpg`) : null;
 
       frameJobs.push({
-        baseCanvasBuffer: selectedCanvas,
-        baseCanvasBuffer2: selectedCanvas2,
         wordsChunk: timedChunks[c].words,
         activeWordIdx: timedChunks[c].activeWordIdx,
-        badgeText,
-        sceneLabel: frameLabel,
-        dataCalloutText: asset.dataCallout,
-        rehookAlertText: '',
-        coverTitleText: '',
-        speakerBadgeText: asset.speakerBadgeText,
-        tensionInfo: isVisualLoopBridge ? getTensionPhaseInfo(0, sceneAssets.length) : tensionInfo,
-        isCommentBaitScene: asset.isCommentBaitScene,
         palette,
-        isFlashCut,
-        themeColor,
         progressRatio,
-        outputFramePath: framePath,
-        outputFramePath2: framePath2
+        outputFramePath: framePath
       });
 
-      if (selectedCanvas2 && framePath2) {
-        const halfDur = (thisChunkDur * 0.5).toFixed(4);
-        const safe1 = framePath.replace(/\\/g, '/');
-        const safe2 = framePath2.replace(/\\/g, '/');
-        masterConcatContent += `file '${safe1}'\nduration ${halfDur}\n`;
-        masterConcatContent += `file '${safe2}'\nduration ${halfDur}\n`;
-        lastRenderedFramePath = safe2;
-      } else {
-        const safeFramePath = framePath.replace(/\\/g, '/');
-        masterConcatContent += `file '${safeFramePath}'\n`;
-        masterConcatContent += `duration ${thisChunkDur.toFixed(4)}\n`;
-        lastRenderedFramePath = safeFramePath;
-      }
+      const safeFramePath = framePath.replace(/\\/g, '/');
+      masterConcatContent += `file '${safeFramePath}'\n`;
+      masterConcatContent += `duration ${thisChunkDur.toFixed(4)}\n`;
+      lastRenderedFramePath = safeFramePath;
     }
 
     elapsedDuration += asset.duration;
   }
 
-  // Render HUD overlays in parallel batches of 16 (super fast since base canvases are pre-built!)
-  const BATCH_SIZE = 16;
+  // Render all transparent PNG subtitle strips in parallel (takes ~0.35 seconds!)
+  const BATCH_SIZE = 32;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
@@ -998,7 +734,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(86, 'Masterizando Voz Shure SM7B (Compressor + EQ) + Batimento Cardíaco...');
+  onProgress(82, 'Renderizando Vídeo Real 20fps + Legendas + Voz Shure SM7B...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -1009,22 +745,54 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // ITEM #3: Broadcast Shure SM7B Studio Voice Mastering (Highpass + Dynamic Compressor + Warm Presence) in FFmpeg
-  const fpsRate = process.env.VERCEL ? '12' : '25';
-  execFileSync(ffmpegPath, [
-    '-y',
+  // Build Single-Pass FFmpeg Command: N Real Video Inputs + Transparent Subtitle Track + Voice + BGM!
+  const fpsRate = process.env.VERCEL ? '18' : '24';
+  const ffmpegArgs = ['-y'];
+
+  sceneAssets.forEach((asset, idx) => {
+    // Use Scene 1's real video on the final loop scene so the end visually matches 0:00!
+    const clipToUse = (idx === sceneAssets.length - 1 && sceneAssets.length >= 2)
+      ? sceneAssets[0].videoClipPath
+      : asset.videoClipPath;
+    ffmpegArgs.push('-stream_loop', '-1', '-t', asset.duration.toFixed(4), '-i', clipToUse);
+  });
+
+  const subsIdx = sceneAssets.length;
+  const voiceIdx = sceneAssets.length + 1;
+  const bgmIdx = sceneAssets.length + 2;
+
+  ffmpegArgs.push(
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
     '-i', masterVoiceWavPath,
-    '-i', bgMusicWav,
-    '-filter_complex', '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
-    '-map', '0:v',
+    '-i', bgMusicWav
+  );
+
+  const vChains = sceneAssets.map((_, k) =>
+    `[${k}:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,fps=${fpsRate},setsar=1,format=yuv420p[v${k}]`
+  ).join(';');
+
+  const concatInputs = sceneAssets.map((_, k) => `[v${k}]`).join('');
+  const filterComplex = [
+    vChains,
+    `${concatInputs}concat=n=${sceneAssets.length}:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=740:w=${WIDTH}:h=540:color=black@0.36:t=fill[bg]`,
+    `[bg][${subsIdx}:v]overlay=0:740:format=auto:shortest=1[vout]`,
+    `[${voiceIdx}:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice]`,
+    `[${bgmIdx}:a]volume=0.33[bgm]`,
+    `[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+  ].join(';');
+
+  ffmpegArgs.push(
+    '-filter_complex', filterComplex,
+    '-map', '[vout]',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-pix_fmt', 'yuv420p', '-r', fpsRate,
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
     finalMp4Path
-  ], { stdio: 'ignore' });
+  );
+
+  execFileSync(ffmpegPath, ffmpegArgs, { stdio: 'ignore' });
 
   try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1036,7 +804,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     videoUrl = `data:video/mp4;base64,${b64}`;
   }
 
-  onProgress(100, 'Short Studio 2.0 finalizado!');
+  onProgress(100, 'Short com Vídeos Reais HD finalizado!');
 
   return {
     id: jobId,
