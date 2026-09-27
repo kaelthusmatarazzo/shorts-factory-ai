@@ -102,21 +102,23 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
     } catch (err2) {}
   }
 
-  // Convert MP3 to uncompressed 44.1kHz 16-bit Stereo WAV with Studio Condenser Warmth EQ
-  // (Pure EQ adds chest warmth @ 185Hz, removes 3.4kHz synthetic sheen, adds 10.5kHz mic air, with ZERO timing change!)
+  const { execFile } = require('child_process');
+  const { promisify } = require('util');
+  const execFileAsync = promisify(execFile);
+
   if (generated) {
-    execFileSync(ffmpegPath, [
+    await execFileAsync(ffmpegPath, [
       '-y', '-i', rawMp3Path,
       '-af', 'equalizer=f=185:t=q:w=1.2:g=2.2,equalizer=f=3400:t=q:w=1.8:g=-2.2,equalizer=f=10500:t=q:w=1.0:g=2.4',
       '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le',
       outputWavPath
-    ], { stdio: 'ignore' });
+    ]);
     try { fs.unlinkSync(rawMp3Path); } catch (e) {}
   } else {
-    execFileSync(ffmpegPath, [
+    await execFileAsync(ffmpegPath, [
       '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
       '-t', '4.0', '-c:a', 'pcm_s16le', outputWavPath
-    ], { stdio: 'ignore' });
+    ]);
   }
 
   // Calculate sample-exact duration from WAV file size (44-byte header, 4 bytes per stereo sample at 44100Hz)
