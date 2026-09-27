@@ -230,7 +230,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     // Block icons, maps, flags, diagrams, AND municipal/urban homonyms
     if (/icon|logo|symbol|flag|map_of|locator_map|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of|spinner|loading|arrow|button/i.test(checkStr)) return;
     seenUrls.add(url);
-    pool.push({ url, title: String(title || '').toLowerCase(), isGif: Boolean(isGif || /\.gif$/i.test(url)) });
+    pool.push({ url, title: String(title || '').toLowerCase(), isGif: Boolean(isGif || /\.gif(?:$|\?)/i.test(url)) });
   };
 
   if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
@@ -295,7 +295,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         const gData = await gRes.json();
         for (const p of Object.values(gData.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif$/i.test(info.url) && (!info.size || info.size < 4500000) && (!info.size || info.size > 28000)) {
+          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4500000) && (!info.size || info.size > 28000)) {
             addCandidate(info.url, p.title || '', true);
           }
         }
@@ -312,7 +312,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         const enArtData = await enArtRes.json();
         for (const p of Object.values(enArtData.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          const isOrigGif = info?.url && /\.gif$/i.test(info.url) && (!info.size || info.size < 4500000);
+          const isOrigGif = info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4500000);
           const imgUrl = isOrigGif ? info.url : (info?.thumburl || info?.url);
           addCandidate(imgUrl, p.title || exactArticleTarget, isOrigGif);
         }
