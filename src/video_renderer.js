@@ -227,8 +227,8 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     if (!url || seenUrls.has(url)) return;
     if (/\.(svg|tif|tiff|ogv|pdf|djvu)$/i.test(url)) return;
     const checkStr = `${url} ${title}`.toLowerCase();
-    // Block icons, maps, flags, diagrams, AND municipal/urban homonyms
-    if (/icon|logo|symbol|flag|map_of|locator_map|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of|spinner|loading|arrow|button/i.test(checkStr)) return;
+    // Block icons, maps, charts, graphs, projections, AND municipal/urban homonyms
+    if (/icon|logo|symbol|flag|_map|map_|map\.|chart|graph|diagram|plot|projection|mollweide|ozone_layer|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of|spinner|loading|arrow|button/i.test(checkStr)) return;
     seenUrls.add(url);
     pool.push({ url, title: String(title || '').toLowerCase(), isGif: Boolean(isGif || /\.gif(?:$|\?)/i.test(url)) });
   };
@@ -271,23 +271,23 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const uniqueEntities = Array.from(entitySet).slice(0, 4);
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
 
-  // Rich English Visual Motion GIF Queries per Atmosphere + Topic so we get 20-30 REAL Animated GIFs!
+  // Rich English Visual Motion GIF Queries per Atmosphere + Topic so we get 20-35 REAL Video-Like Animated GIFs!
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const themeGifFallback = colorTheme === 'danger'
-    ? 'volcano OR lava OR lightning OR explosion OR plasma OR fire OR seismic OR nuclear'
+    ? 'volcano OR lava OR lightning OR explosion OR plasma OR eruption OR fire OR storm'
     : colorTheme === 'emerald'
-      ? 'ocean OR waves OR jellyfish OR forest OR microscope OR cell OR water OR nature'
+      ? 'ocean OR waves OR jellyfish OR waterfall OR microscope OR cell OR forest OR nature'
       : colorTheme === 'gold'
-        ? 'eclipse OR astronomy OR solar OR planet OR earth OR desert OR time lapse'
-        : 'galaxy OR planet OR orbit OR nebula OR space OR black hole OR supernova OR earth';
+        ? 'eclipse OR solar OR planet OR galaxy OR aurora OR comet OR meteor'
+        : 'galaxy OR planet OR nebula OR supernova OR black hole OR aurora OR solar flare';
   const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' OR ');
   const gifQuery1 = `filemime:image/gif ${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback}`;
-  const gifQuery2 = `filemime:image/gif earth OR space OR physics OR science OR nature OR ocean`;
+  const gifQuery2 = `filemime:image/gif volcano OR aurora OR galaxy OR lightning OR ocean OR tornado OR solar flare OR waterfall`;
 
   await Promise.allSettled([
-    // 2A. Primary Animated GIFs Search on Wikimedia Commons (gsrlimit=35)
+    // 2A. Primary Animated GIFs Search on Wikimedia Commons (gsrlimit=40)
     (async () => {
-      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery1)}&gsrlimit=35&prop=imageinfo&iiprop=url|size&format=json`;
+      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery1)}&gsrlimit=40&prop=imageinfo&iiprop=url|size&format=json`;
       const gRes = await fetch(gifCommonsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
         signal: AbortSignal.timeout(2400)
@@ -296,15 +296,15 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         const gData = await gRes.json();
         for (const p of Object.values(gData.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 35000)) {
+          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 45000)) {
             addCandidate(info.url, p.title || '', true);
           }
         }
       }
     })(),
-    // 2B. Secondary Animated GIFs Search to guarantee 14+ distinct GIFs
+    // 2B. Secondary Cinematic Animated GIFs Search (gsrlimit=35)
     (async () => {
-      const gifCommonsUrl2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery2)}&gsrlimit=25&prop=imageinfo&iiprop=url|size&format=json`;
+      const gifCommonsUrl2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery2)}&gsrlimit=35&prop=imageinfo&iiprop=url|size&format=json`;
       const gRes2 = await fetch(gifCommonsUrl2, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
         signal: AbortSignal.timeout(2400)
@@ -313,7 +313,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         const gData2 = await gRes2.json();
         for (const p of Object.values(gData2.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 35000)) {
+          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 45000)) {
             addCandidate(info.url, p.title || '', true);
           }
         }
@@ -358,56 +358,38 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const photoPool = pool.filter(x => !x.isGif);
   console.log(`🎬 [Motion Pool] "${rawTopic}" (${enTitle || 'PT'}): ${gifPool.length} GIFs animados reais + ${photoPool.length} fotos!`);
 
-  // 3. Assign Shot A (0-50%) and Shot B (50-100%) with REAL ANIMATED GIFS FIRST in every single scene!
-  const usedGifIndices = new Set();
-  const usedPhotoIndices = new Set();
+  // 3. Assign 1 unique primary GIF + 1 backup GIF per shot so all 14 shots across 7 scenes get UNIQUE smooth GIFs!
+  let gifCursor = 0;
+  let photoCursor = 0;
 
-  const pickNextGifs = (count = 2) => {
-    const picked = [];
-    for (let k = 0; k < count; k++) {
-      let bestIdx = -1;
-      for (let idx = 0; idx < gifPool.length; idx++) {
-        if (!usedGifIndices.has(idx)) {
-          bestIdx = idx;
-          break;
-        }
-      }
-      if (bestIdx === -1 && gifPool.length > 0) {
-        bestIdx = (usedGifIndices.size + k) % gifPool.length;
-      }
-      if (bestIdx !== -1) {
-        usedGifIndices.add(bestIdx);
-        picked.push(gifPool[bestIdx].url);
-      }
-    }
-    return picked;
+  const nextGifQueue = () => {
+    if (gifPool.length === 0) return [];
+    const primary = gifPool[gifCursor % gifPool.length].url;
+    const backup = gifPool[(gifCursor + 7) % gifPool.length].url;
+    gifCursor++;
+    return [primary, backup];
   };
 
-  const pickFallbackPhoto = () => {
-    for (let idx = 0; idx < photoPool.length; idx++) {
-      if (!usedPhotoIndices.has(idx)) {
-        usedPhotoIndices.add(idx);
-        return photoPool[idx].url;
-      }
-    }
-    return photoPool[0]?.url || null;
+  const nextPhotoFallback = () => {
+    if (photoPool.length === 0) return null;
+    const url = photoPool[photoCursor % photoPool.length].url;
+    photoCursor++;
+    return url;
   };
 
   const sceneDualQueues = scenes.map(() => {
-    const gifsA = pickNextGifs(2);
-    const gifsB = pickNextGifs(2);
-    const fbA = pickFallbackPhoto();
-    const fbB = pickFallbackPhoto();
+    const fbA = nextPhotoFallback();
+    const fbB = nextPhotoFallback();
     return {
-      shotAQueue: [...gifsA, ...(fbA ? [fbA] : [])],
-      shotBQueue: [...gifsB, ...(fbB ? [fbB] : [])]
+      shotAQueue: [...nextGifQueue(), ...(fbA ? [fbA] : [])],
+      shotBQueue: [...nextGifQueue(), ...(fbB ? [fbB] : [])]
     };
   });
 
   return sceneDualQueues;
 }
 
-// Downloads a real multi-frame Animated GIF (.gif) and extracts 8 stationary-frame animation steps (ZERO camera shake!)
+// Downloads a real multi-frame Animated GIF (.gif) with >= 8 frames and extracts 8 stationary-frame animation steps (ZERO camera shake!)
 async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag = 'A') {
   for (const imgUrl of urlQueue) {
     if (!imgUrl) continue;
@@ -420,8 +402,8 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag =
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 5500) {
           const meta = await sharp(buf, { animated: false }).metadata();
-          // Require at least 3 animation pages for a real moving GIF!
-          if (meta.pages && meta.pages >= 3) {
+          // Require at least 8 animation pages for a real smooth video-like GIF!
+          if (meta.pages && meta.pages >= 8) {
             const pCount = meta.pages;
             const numSteps = Math.min(8, pCount);
             const pageIdxs = Array.from({ length: numSteps }, (_, k) =>
@@ -433,7 +415,6 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag =
             console.log(`🎞️ [Cena ${sceneIdx + 1}-${shotTag}] GIF ANIMADO REAL (${pCount} frames): ${imgUrl.split('/').pop().split('?')[0].slice(0, 38)}`);
             return { isAnimatedGif: true, frames: gifFrames };
           }
-          // If this URL was supposed to be a GIF or there are more URLs in queue, try the next GIF URL first!
           if (/\.gif(?:$|\?)/i.test(imgUrl) && urlQueue.indexOf(imgUrl) < urlQueue.length - 1) {
             continue;
           }
