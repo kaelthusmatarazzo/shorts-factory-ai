@@ -256,7 +256,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Run English Wikipedia Article Media + Wikimedia Animated GIFs + High-Res Photos IN PARALLEL (max 2.5s total!)
+  // 2. Run English Wikipedia Article Media + Dedicated Wikimedia Animated GIFs Search IN PARALLEL!
   const exactArticleTarget = enTitleFull || scriptData.wikiSearch || fullSourceTopic;
   const entitySet = new Set();
   if (disambiguatedTerm) entitySet.add(disambiguatedTerm);
@@ -271,56 +271,74 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const uniqueEntities = Array.from(entitySet).slice(0, 4);
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
 
-  // Smart Animated GIF Query: combines topic words + scientific motion phenomena so EVERY video gets real Animated GIFs!
+  // Rich English Visual Motion GIF Queries per Atmosphere + Topic so we get 20-30 REAL Animated GIFs!
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const themeGifFallback = colorTheme === 'danger'
-    ? 'volcano OR radiation OR lightning OR plasma OR explosion'
+    ? 'volcano OR lava OR lightning OR explosion OR plasma OR fire OR seismic OR nuclear'
     : colorTheme === 'emerald'
-      ? 'microscope OR cell OR jellyfish OR ocean OR forest'
+      ? 'ocean OR waves OR jellyfish OR forest OR microscope OR cell OR water OR nature'
       : colorTheme === 'gold'
-        ? 'eclipse OR gear OR astronomy OR compass OR desert'
-        : 'galaxy OR orbit OR planet OR nebula OR black hole';
+        ? 'eclipse OR astronomy OR solar OR planet OR earth OR desert OR time lapse'
+        : 'galaxy OR planet OR orbit OR nebula OR space OR black hole OR supernova OR earth';
   const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' OR ');
-  const gifQuery = `filemime:image/gif ${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback}`;
+  const gifQuery1 = `filemime:image/gif ${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback}`;
+  const gifQuery2 = `filemime:image/gif earth OR space OR physics OR science OR nature OR ocean`;
 
   await Promise.allSettled([
-    // 2A. Animated GIFs Search on Wikimedia Commons (Real Motion Clips — guaranteed 8-18 GIFs per video!)
+    // 2A. Primary Animated GIFs Search on Wikimedia Commons (gsrlimit=35)
     (async () => {
-      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery)}&gsrlimit=20&prop=imageinfo&iiprop=url|size&format=json`;
+      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery1)}&gsrlimit=35&prop=imageinfo&iiprop=url|size&format=json`;
       const gRes = await fetch(gifCommonsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2100)
+        signal: AbortSignal.timeout(2400)
       });
       if (gRes.ok) {
         const gData = await gRes.json();
         for (const p of Object.values(gData.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4500000) && (!info.size || info.size > 28000)) {
+          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 35000)) {
             addCandidate(info.url, p.title || '', true);
           }
         }
       }
     })(),
-    // 2B. Exact English Wikipedia Article Embedded Media
+    // 2B. Secondary Animated GIFs Search to guarantee 14+ distinct GIFs
     (async () => {
-      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=28&prop=imageinfo&iiprop=url|size&iiurlwidth=800&redirects=1&format=json`;
+      const gifCommonsUrl2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery2)}&gsrlimit=25&prop=imageinfo&iiprop=url|size&format=json`;
+      const gRes2 = await fetch(gifCommonsUrl2, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(2400)
+      });
+      if (gRes2.ok) {
+        const gData2 = await gRes2.json();
+        for (const p of Object.values(gData2.query?.pages || {})) {
+          const info = p?.imageinfo?.[0];
+          if (info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000) && (!info.size || info.size > 35000)) {
+            addCandidate(info.url, p.title || '', true);
+          }
+        }
+      }
+    })(),
+    // 2C. Exact English Wikipedia Article Embedded Media (Fallback Photos & GIFs)
+    (async () => {
+      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=25&prop=imageinfo&iiprop=url|size&iiurlwidth=800&redirects=1&format=json`;
       const enArtRes = await fetch(enArtImgsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2100)
+        signal: AbortSignal.timeout(2200)
       });
       if (enArtRes.ok) {
         const enArtData = await enArtRes.json();
         for (const p of Object.values(enArtData.query?.pages || {})) {
           const info = p?.imageinfo?.[0];
-          const isOrigGif = info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4500000);
+          const isOrigGif = info?.url && /\.gif(?:$|\?)/i.test(info.url) && (!info.size || info.size < 4800000);
           const imgUrl = isOrigGif ? info.url : (info?.thumburl || info?.url);
           addCandidate(imgUrl, p.title || exactArticleTarget, isOrigGif);
         }
       }
     })(),
-    // 2C. Wikimedia Commons High-Res Scientific Photos & Media
+    // 2D. Wikimedia Commons High-Res Scientific Photos
     (async () => {
-      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=45&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
+      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
       const cRes = await fetch(commonsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
         signal: AbortSignal.timeout(2200)
@@ -336,76 +354,91 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   ]);
 
   const enTitle = enTitleClean || enTitleFull;
-  const gifCount = pool.filter(x => x.isGif).length;
-  console.log(`🎬 [Motion Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} mídias reais (${gifCount} GIFs animados)!`);
+  const gifPool = pool.filter(x => x.isGif);
+  const photoPool = pool.filter(x => !x.isGif);
+  console.log(`🎬 [Motion Pool] "${rawTopic}" (${enTitle || 'PT'}): ${gifPool.length} GIFs animados reais + ${photoPool.length} fotos!`);
 
-  // 3. Assign TWO distinct media queues (shotAQueue for 0-50%, shotBQueue for 50-100%) prioritizing Animated GIFs!
-  const usedIndices = new Set();
-  const sceneDualQueues = scenes.map((s, sceneIdx) => {
-    const keywords = `${s.imageQuery || ''} ${s.sceneLabel || ''} ${s.narration || ''}`
-      .toLowerCase()
-      .replace(/[^\wÀ-ÿ\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length >= 4);
+  // 3. Assign Shot A (0-50%) and Shot B (50-100%) with REAL ANIMATED GIFS FIRST in every single scene!
+  const usedGifIndices = new Set();
+  const usedPhotoIndices = new Set();
 
-    const scoreAvailablePool = () => pool.map((item, idx) => {
-      let score = usedIndices.has(idx) ? -1000 : 0;
-      if (item.isGif) score += 115; // Prioritize real Animated GIFs!
-      if (sceneIdx === 0 && idx === 0 && !usedIndices.has(0)) score += 500;
-      for (const kw of keywords) {
-        if (item.title.includes(kw)) score += 25;
+  const pickNextGifs = (count = 2) => {
+    const picked = [];
+    for (let k = 0; k < count; k++) {
+      let bestIdx = -1;
+      for (let idx = 0; idx < gifPool.length; idx++) {
+        if (!usedGifIndices.has(idx)) {
+          bestIdx = idx;
+          break;
+        }
       }
-      if (item.title.includes(rawTopic.toLowerCase())) score += 15;
-      if (enTitle && item.title.includes(enTitle.toLowerCase())) score += 15;
-      return { item, idx, score };
-    }).sort((a, b) => b.score - a.score);
+      if (bestIdx === -1 && gifPool.length > 0) {
+        bestIdx = (usedGifIndices.size + k) % gifPool.length;
+      }
+      if (bestIdx !== -1) {
+        usedGifIndices.add(bestIdx);
+        picked.push(gifPool[bestIdx].url);
+      }
+    }
+    return picked;
+  };
 
-    const rankedA = scoreAvailablePool();
-    if (rankedA[0] && rankedA[0].idx !== undefined) usedIndices.add(rankedA[0].idx);
-    const shotAQueue = rankedA.slice(0, 3).map(x => x.item.url);
+  const pickFallbackPhoto = () => {
+    for (let idx = 0; idx < photoPool.length; idx++) {
+      if (!usedPhotoIndices.has(idx)) {
+        usedPhotoIndices.add(idx);
+        return photoPool[idx].url;
+      }
+    }
+    return photoPool[0]?.url || null;
+  };
 
-    const rankedB = scoreAvailablePool();
-    if (rankedB[0] && rankedB[0].idx !== undefined) usedIndices.add(rankedB[0].idx);
-    const shotBQueue = rankedB.slice(0, 3).map(x => x.item.url);
-
+  const sceneDualQueues = scenes.map(() => {
+    const gifsA = pickNextGifs(2);
+    const gifsB = pickNextGifs(2);
+    const fbA = pickFallbackPhoto();
+    const fbB = pickFallbackPhoto();
     return {
-      shotAQueue: shotAQueue.length > 0 ? shotAQueue : shotBQueue,
-      shotBQueue: shotBQueue.length > 0 ? shotBQueue : shotAQueue
+      shotAQueue: [...gifsA, ...(fbA ? [fbA] : [])],
+      shotBQueue: [...gifsB, ...(fbB ? [fbB] : [])]
     };
   });
 
   return sceneDualQueues;
 }
 
-// Downloads either a multi-frame Animated GIF (.gif) or a High-Res Photo and returns up to 4 extracted raw frames!
+// Downloads a real multi-frame Animated GIF (.gif) and extracts 8 stationary-frame animation steps (ZERO camera shake!)
 async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag = 'A') {
   for (const imgUrl of urlQueue) {
     if (!imgUrl) continue;
     try {
       const r = await fetch(imgUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(2200)
       });
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 5500) {
           const meta = await sharp(buf, { animated: false }).metadata();
-          if (meta.pages && meta.pages > 1) {
+          // Require at least 3 animation pages for a real moving GIF!
+          if (meta.pages && meta.pages >= 3) {
             const pCount = meta.pages;
-            const pageIdxs = [
-              0,
-              Math.min(pCount - 1, Math.floor(pCount * 0.33)),
-              Math.min(pCount - 1, Math.floor(pCount * 0.66)),
-              Math.min(pCount - 1, Math.floor(pCount * 0.92))
-            ];
-            const gifFrames = await Promise.all(
-              pageIdxs.map(p => sharp(buf, { page: p }).jpeg({ quality: 88 }).toBuffer())
+            const numSteps = Math.min(8, pCount);
+            const pageIdxs = Array.from({ length: numSteps }, (_, k) =>
+              Math.min(pCount - 1, Math.floor((k / numSteps) * pCount))
             );
-            console.log(`🎞️ [Cena ${sceneIdx + 1}-${shotTag}] GIF ANIMADO REAL (${pCount} frames): ${imgUrl.split('/').pop().slice(0, 38)}`);
+            const gifFrames = await Promise.all(
+              pageIdxs.map(p => sharp(buf, { page: p }).jpeg({ quality: 86 }).toBuffer())
+            );
+            console.log(`🎞️ [Cena ${sceneIdx + 1}-${shotTag}] GIF ANIMADO REAL (${pCount} frames): ${imgUrl.split('/').pop().split('?')[0].slice(0, 38)}`);
             return { isAnimatedGif: true, frames: gifFrames };
           }
+          // If this URL was supposed to be a GIF or there are more URLs in queue, try the next GIF URL first!
+          if (/\.gif(?:$|\?)/i.test(imgUrl) && urlQueue.indexOf(imgUrl) < urlQueue.length - 1) {
+            continue;
+          }
           const normalized = await sharp(buf).jpeg({ quality: 88 }).toBuffer();
-          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Mídia real: ${imgUrl.split('/').pop().slice(0, 40)} (${Math.round(buf.length / 1024)} KB)`);
+          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Foto fixa (sem tremor): ${imgUrl.split('/').pop().split('?')[0].slice(0, 38)}`);
           return { isAnimatedGif: false, frames: [normalized] };
         }
       }
@@ -426,8 +459,8 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag =
   return { isAnimatedGif: false, frames: [fbBuf] };
 }
 
-// Ultra-Fast Single-Pass Motion Generator (Zero PNG Zlib Overhead — 10x Faster on Vercel!)
-async function buildMotionSequenceForMedia(mediaObj, blurredBackdropBuffer, visualStyle = 'cinema', themeColor = '#00f0ff', panDirection = 1) {
+// Rock-Steady Frame Renderer: Plays all 8 extracted GIF frames with ZERO position jumping, or holds fallback photo 100% steady!
+async function buildMotionSequenceForMedia(mediaObj, blurredBackdropBuffer, visualStyle = 'cinema', themeColor = '#00f0ff') {
   const isCinema = visualStyle !== 'card';
   const boxW = isCinema ? 688 : CARD_W;
   const boxH = isCinema ? 930 : CARD_H;
@@ -460,52 +493,28 @@ async function buildMotionSequenceForMedia(mediaObj, blurredBackdropBuffer, visu
       .toBuffer();
   };
 
-  // CASE A: Real Multi-Frame Animated GIF (.gif)!
+  // CASE A: Real Multi-Frame Animated GIF (.gif) — 100% Stationary Camera Box so ONLY the GIF animation moves (Zero Shake!)
   if (mediaObj.isAnimatedGif && mediaObj.frames && mediaObj.frames.length > 1) {
-    return await Promise.all(mediaObj.frames.map(async (gifFrameBuf, idx) => {
-      const z = 1.02 + idx * 0.015;
-      const sW = Math.round(boxW * z);
-      const sH = Math.round(boxH * z);
+    return await Promise.all(mediaObj.frames.map(async (gifFrameBuf) => {
       const cropped = await sharp(gifFrameBuf)
-        .resize(sW, sH, { fit: 'cover', position: 'centre' })
-        .extract({
-          left: Math.floor((sW - boxW) / 2),
-          top: Math.floor((sH - boxH) / 2),
-          width: boxW,
-          height: boxH
-        })
+        .resize(boxW, boxH, { fit: 'cover', position: 'centre' })
         .modulate({ brightness: 1.04, saturation: 1.15 })
-        .jpeg({ quality: 88 })
+        .jpeg({ quality: 87 })
         .toBuffer();
       return await composeCardBuffer(cropped);
     }));
   }
 
-  // CASE B: High-Res Scientific Photo -> Sharpen ONCE at 1.14x, then slice smooth Camera Pan/Zoom motion frames!
+  // CASE B: Fallback Photo — 100% Rock-Steady 4K Frame (Zero Position Jumping / Zero Shaking!)
   const rawPhotoBuffer = (mediaObj.frames && mediaObj.frames[0]) ? mediaObj.frames[0] : mediaObj;
-  const masterW = Math.round(boxW * 1.14);
-  const masterH = Math.round(boxH * 1.14);
-  const masterSharp = await sharp(rawPhotoBuffer)
-    .resize(masterW, masterH, { fit: 'cover', position: 'centre' })
+  const steadyCrop = await sharp(rawPhotoBuffer)
+    .resize(boxW, boxH, { fit: 'cover', position: 'centre' })
     .sharpen({ sigma: 0.85 })
     .modulate({ brightness: 1.04, saturation: 1.14 })
-    .jpeg({ quality: 90 })
+    .jpeg({ quality: 89 })
     .toBuffer();
 
-  const maxOffsetX = Math.max(0, masterW - boxW);
-  const maxOffsetY = Math.max(0, masterH - boxH);
-  const steps = process.env.VERCEL ? [0.0, 1.0] : [0.0, 0.50, 1.0];
-
-  return await Promise.all(steps.map(async (t) => {
-    const prog = panDirection > 0 ? t : (1.0 - t);
-    const left = Math.min(maxOffsetX, Math.max(0, Math.round(maxOffsetX * prog)));
-    const top = Math.min(maxOffsetY, Math.max(0, Math.round(maxOffsetY * prog)));
-    const cropped = await sharp(masterSharp)
-      .extract({ left, top, width: boxW, height: boxH })
-      .jpeg({ quality: 88 })
-      .toBuffer();
-    return await composeCardBuffer(cropped);
-  }));
+  return [await composeCardBuffer(steadyCrop)];
 }
 
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
