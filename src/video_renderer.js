@@ -759,7 +759,6 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  const fpsOut = process.env.VERCEL ? '10' : '15';
   const ffmpegArgs = [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
@@ -769,7 +768,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
     '-map', '0:v',
     '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '25', '-pix_fmt', 'yuv420p', '-r', fpsOut,
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
