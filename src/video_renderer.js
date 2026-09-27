@@ -281,7 +281,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
         ? 'eclipse OR gear OR astronomy OR compass OR desert'
         : 'galaxy OR orbit OR planet OR nebula OR black hole';
   const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' OR ');
-  const gifQuery = `filemime:image/gif (${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback})`;
+  const gifQuery = `filemime:image/gif ${cleanTopicWords ? cleanTopicWords + ' OR ' : ''}${themeGifFallback}`;
 
   await Promise.allSettled([
     // 2A. Animated GIFs Search on Wikimedia Commons (Real Motion Clips — guaranteed 8-18 GIFs per video!)
