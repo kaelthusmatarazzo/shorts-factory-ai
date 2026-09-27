@@ -5,10 +5,10 @@ const ffmpegPath = require('ffmpeg-static');
 const sharp = require('sharp');
 const opentype = require('opentype.js');
 
-const WIDTH = 480;
-const HEIGHT = 854;
-const CARD_W = 420;
-const CARD_H = 320;
+const WIDTH = 720;
+const HEIGHT = 1280;
+const CARD_W = 640;
+const CARD_H = 480;
 
 // Load bundled Hormozi-Black.ttf (Arial Black) once so SVG text is converted into pure <path d="..." /> vector curves!
 // This guarantees 100% identical, razor-sharp Portuguese subtitles on Vercel Linux without needing OS system fonts!
@@ -223,25 +223,28 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const pool = [];
   const seenUrls = new Set();
 
-  const addVideoCandidate = (url, title = '') => {
+  const addCandidate = (url, title = '') => {
     if (!url || seenUrls.has(url)) return;
+    if (/\.svg|\.gif|\.tif|\.pdf|\.ogg|\.ogv|\.webm/i.test(url)) return;
     const checkStr = String(title || '').toLowerCase();
-    // Block talking heads, conferences, tutorials, maps, and non-cinematic clips
-    if (/wikimania|conference|interview|lecture|speech|pronunciation|sign_language|screencast|tutorial|icon|logo|flag|map|chart|graph|diagram|uruguay|policia|municipio|alcaldia|speaker|talk|presentation|webcam|animation/i.test(checkStr)) return;
+    if (/logo|icon|flag|coat_of_arms|signature|map|locator|diagram|chart|graph|symbol|stamp|medal|portrait_placeholder|commons-logo|wikidata/i.test(checkStr)) return;
     seenUrls.add(url);
     pool.push({ url, title: checkStr });
   };
 
-  // 1. Fast PT Wikipedia Lookup to get English topic title (1.8s timeout)
+  if (heroUrl) addCandidate(heroUrl, fullSourceTopic);
+
+  // 1. Fast PT Wikipedia Lookup -> English title + PT Thumbnail
   try {
-    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=langlinks&lllang=en&redirects=1&format=json`;
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=pageimages|langlinks&piprop=thumbnail&pithumbsize=1000&lllang=en&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(1800)
+      signal: AbortSignal.timeout(2200)
     });
     if (ptRes.ok) {
       const ptData = await ptRes.json();
       const page = Object.values(ptData.query?.pages || {})[0];
+      if (page?.thumbnail?.source) addCandidate(page.thumbnail.source, page.title || fullSourceTopic);
       if (page?.langlinks?.[0]?.['*']) {
         enTitleFull = page.langlinks[0]['*'].trim();
         enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
@@ -249,130 +252,116 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Build Real Video Queries (filetype:video with fast 360p.mpeg4.mov / 480p.vp9.webm transcodes!)
-  const colorTheme = scriptData.colorTheme || 'cosmic';
-  const themeVideoQuery = colorTheme === 'danger'
-    ? 'filetype:video volcano eruption OR lava flow OR lightning storm OR canyon drone OR glacier OR fire'
-    : colorTheme === 'emerald'
-      ? 'filetype:video drone forest OR ocean waves aerial OR waterfall drone OR coral reef OR dolphins OR nature drone'
-      : colorTheme === 'gold'
-        ? 'filetype:video desert drone OR canyon aerial OR mountains drone OR eclipse OR ruins aerial OR clouds timelapse'
-        : 'filetype:video planet earth space OR aurora borealis OR galaxy OR solar flare OR night sky timelapse OR ocean drone';
-
-  const cleanTopicWords = (enTitleClean || rawTopic).replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length >= 4).slice(0, 2).join(' ');
-  const topicVideoQuery = `filetype:video ${cleanTopicWords} drone OR aerial OR timelapse OR nature OR space`;
-  const backupDroneQuery = `filetype:video drone footage aerial view ocean OR mountains OR volcano OR forest OR earth`;
-
-  const extractBestVideoDerivative = (pageObj) => {
-    const derivs = pageObj?.videoinfo?.[0]?.derivatives || [];
-    // Strictly use 360p.mpeg4.mov (decodes in 2.4s in FFmpeg C++, whereas VP9 .webm takes 14s!)
-    const mpeg4 = derivs.find(d => d.src && d.transcodekey === '360p.mpeg4.mov');
-    return mpeg4 ? mpeg4.src : null;
-  };
-
+  // 2. Parallel English Wikipedia Article Images + Wikimedia Commons Topic Photos
+  const searchTopic = enTitleClean || fullSourceTopic || rawTopic;
   await Promise.allSettled([
-    // 2A. Topic-Specific Real Videos
     (async () => {
-      const u1 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(topicVideoQuery)}&gsrlimit=20&prop=videoinfo&viprop=derivatives&format=json`;
-      const r1 = await fetch(u1, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
-      if (r1.ok) {
-        const d1 = await r1.json();
-        for (const p of Object.values(d1.query?.pages || {})) {
-          const vUrl = extractBestVideoDerivative(p);
-          if (vUrl) addVideoCandidate(vUrl, p.title || '');
+      if (!enTitleFull) return;
+      const enUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=images&titles=${encodeURIComponent(enTitleFull)}&gimlimit=25&prop=imageinfo&iiprop=url&iiurlwidth=1000&format=json`;
+      const enRes = await fetch(enUrl, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      if (enRes.ok) {
+        const enData = await enRes.json();
+        for (const p of Object.values(enData.query?.pages || {})) {
+          const ii = p.imageinfo?.[0];
+          if (ii?.thumburl || ii?.url) addCandidate(ii.thumburl || ii.url, p.title || '');
         }
       }
     })(),
-    // 2B. Atmosphere-Specific Cinematic Real Videos
     (async () => {
-      const u2 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(themeVideoQuery)}&gsrlimit=30&prop=videoinfo&viprop=derivatives&format=json`;
-      const r2 = await fetch(u2, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
-      if (r2.ok) {
-        const d2 = await r2.json();
-        for (const p of Object.values(d2.query?.pages || {})) {
-          const vUrl = extractBestVideoDerivative(p);
-          if (vUrl) addVideoCandidate(vUrl, p.title || '');
-        }
-      }
-    })(),
-    // 2C. Backup 4K Drone/Nature Real Videos
-    (async () => {
-      const u3 = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(backupDroneQuery)}&gsrlimit=25&prop=videoinfo&viprop=derivatives&format=json`;
-      const r3 = await fetch(u3, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2200) });
-      if (r3.ok) {
-        const d3 = await r3.json();
-        for (const p of Object.values(d3.query?.pages || {})) {
-          const vUrl = extractBestVideoDerivative(p);
-          if (vUrl) addVideoCandidate(vUrl, p.title || '');
+      const q = `filetype:bitmap ${searchTopic}`;
+      const cUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(q)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=1000&format=json`;
+      const cRes = await fetch(cUrl, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        for (const p of Object.values(cData.query?.pages || {})) {
+          const ii = p.imageinfo?.[0];
+          if (ii?.thumburl || ii?.url) addCandidate(ii.thumburl || ii.url, p.title || '');
         }
       }
     })()
   ]);
 
-  // Guaranteed high-cinema real camera/drone .mov backup bank (100% HTTP-200 verified 1.4MB - 3.5MB mpeg4.mov clips!)
-  const verifiedRealCameraClips = [
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/5/53/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/1/11/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/33/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm.360p.mpeg4.mov'
+  const curatedFallbacks = [
+    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&q=80',
+    'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1080&q=80',
+    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=1080&q=80',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1080&q=80',
+    'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1080&q=80',
+    'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=1080&q=80'
   ];
-  for (const vUrl of verifiedRealCameraClips) addVideoCandidate(vUrl, 'verified_real_camera_footage');
+  for (const fb of curatedFallbacks) addCandidate(fb, 'fallback_cinema');
 
-  const enTitle = enTitleClean || enTitleFull;
-  console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov) encontrados!`);
+  console.log(`📸 [Photo Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} fotos reais HD encontradas!`);
 
-  // Assign 3 candidate real .mov URLs per take + 1 guaranteed fast (<3.5MB) real camera/drone .mov clip
-  let vCursor = 0;
+  // Assign 2 distinct real photos per scene (Photo A for 1st half, Photo B for 2nd half)
+  let pCursor = 0;
   return scenes.map((_, sIdx) => {
-    const guaranteedFastReal = verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length];
-    if (pool.length === 0) return { videoQueue: [guaranteedFastReal] };
-    const primary = pool[vCursor % pool.length].url;
-    const backup1 = pool[(vCursor + 4) % pool.length].url;
-    vCursor++;
-    return {
-      videoQueue: [primary, backup1, guaranteedFastReal]
-    };
+    const qA = [
+      pool[pCursor % pool.length]?.url,
+      pool[(pCursor + 3) % pool.length]?.url,
+      curatedFallbacks[sIdx % curatedFallbacks.length]
+    ].filter(Boolean);
+    pCursor++;
+    const qB = [
+      pool[pCursor % pool.length]?.url,
+      pool[(pCursor + 3) % pool.length]?.url,
+      curatedFallbacks[(sIdx + 2) % curatedFallbacks.length]
+    ].filter(Boolean);
+    pCursor++;
+    return { queueA: qA, queueB: qB };
   });
 }
 
-// Downloads a real .mov video clip to disk (strictly validates native QuickTime/MP4 container header & skips >4.8MB files so FFmpeg decodes in 2.4s!)
-async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, sceneIdx = 0) {
-  for (const vidUrl of videoQueue) {
-    if (!vidUrl) continue;
+// Downloads a real photo and creates a SINGLE rock-steady 720x1280 HD background buffer (ZERO shaking!)
+async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
+  const pal = getAtmospherePalette(colorTheme);
+  let rawImgBuf = null;
+
+  for (const url of urlQueue) {
+    if (!url) continue;
     try {
-      const r = await fetch(vidUrl, {
-        headers: {
-          'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)'
-        },
-        signal: AbortSignal.timeout(2000)
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(2400)
       });
-      if (r.ok) {
-        const contentLen = parseInt(r.headers.get('content-length') || '0', 10);
-        if (contentLen > 4800000) {
-          try { await r.body?.cancel(); } catch (e) {}
-          continue;
-        }
-        const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 80000 && buf.length <= 4800000) {
-          // Strictly validate QuickTime/MP4 .mov header ('ftyp'/'moov'/'wide'/'mdat') — never allow slow VP9 WebM!
-          const boxType = buf.slice(4, 8).toString('ascii');
-          const isMov = (boxType === 'ftyp' || boxType === 'moov' || boxType === 'wide' || boxType === 'mdat');
-          if (isMov) {
-            fs.writeFileSync(outputClipPath, buf);
-            const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
-            console.log(`🎥 [Take ${sceneIdx + 1}] VÍDEO REAL (.mov) baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
-            return outputClipPath;
-          }
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length > 8000) {
+          rawImgBuf = buf;
+          break;
         }
       }
     } catch (e) {}
   }
 
-  // Fallback synthetic moving video generated via FFmpeg lavfi if offline
-  execFileSync(ffmpegPath, [
-    '-y', '-f', 'lavfi', '-i', 'testsrc2=size=480x854:rate=15', '-t', '6.0',
-    '-c:v', 'libx264', '-preset', 'ultrafast', outputClipPath
-  ], { stdio: 'ignore' });
-  return outputClipPath;
+  // Subtle dark gradient at the bottom so the Karaoke Subtitles pop with 100% contrast
+  const vignetteSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.12"/>
+        <stop offset="55%" stop-color="#000000" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="#04060c" stop-opacity="0.78"/>
+      </linearGradient>
+    </defs>
+    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
+  </svg>`;
+
+  if (rawImgBuf) {
+    try {
+      return await sharp(rawImgBuf)
+        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'attention' })
+        .modulate({ brightness: 0.96, saturation: 1.15 })
+        .composite([{ input: Buffer.from(vignetteSvg), top: 0, left: 0 }])
+        .jpeg({ quality: 84 })
+        .toBuffer();
+    } catch (e) {}
+  }
+
+  // Fallback dark studio canvas if offline
+  const fallbackSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${WIDTH}" height="${HEIGHT}" fill="${pal.bgGradTop}"/>
+  </svg>`;
+  return sharp(Buffer.from(fallbackSvg)).jpeg({ quality: 82 }).toBuffer();
 }
 
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
@@ -566,52 +555,52 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Ultra-Fast Transparent PNG Subtitle Strip Renderer (480x220px — renders all 100 subtitle steps in 0.18s!)
+// Clean 720x1280 HD Frame Renderer: Real Topic Photo + Hormozi Karaoke Subtitles ONLY (zero extra text badges, zero shaking!)
 async function renderCaptionedFrame({
+  photoBuffer,
   wordsChunk,
   activeWordIdx = 0,
   palette = null,
   progressRatio,
   outputFramePath
 }) {
-  const STRIP_H = 220;
   const pal = palette || getAtmospherePalette('cosmic');
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
 
-  let fontSize = 35;
-  if (maxCharsInAnyLine >= 18) fontSize = 22;
-  else if (maxCharsInAnyLine >= 15) fontSize = 25;
-  else if (maxCharsInAnyLine >= 13) fontSize = 29;
-  else if (maxCharsInAnyLine >= 11) fontSize = 32;
+  let fontSize = 52;
+  if (maxCharsInAnyLine >= 18) fontSize = 33;
+  else if (maxCharsInAnyLine >= 15) fontSize = 38;
+  else if (maxCharsInAnyLine >= 13) fontSize = 44;
+  else if (maxCharsInAnyLine >= 11) fontSize = 48;
 
-  const lineSpacing = Math.round(fontSize * 1.40);
-  // Local Y inside the 480x220 bottom strip (placed at y=634 on the 480x854 video)
-  const baseStartY = wrappedLines.length === 1 ? 82 : (wrappedLines.length === 2 ? 62 : 44);
+  const lineSpacing = Math.round(fontSize * 1.42);
+  const baseStartY = wrappedLines.length === 1 ? 885 : (wrappedLines.length === 2 ? 850 : 820);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    return renderHormoziLineVectorPaths(lineItems, 240, yPos, fontSize, 400, pal);
+    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
   }).join('\n');
 
-  const progressWidth = Math.max(10, Math.round(WIDTH * progressRatio));
+  const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
-  // Transparent 480x220 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
-  const hudSvg = `<svg width="${WIDTH}" height="${STRIP_H}" xmlns="http://www.w3.org/2000/svg">
+  // Clean HUD SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
+  const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <g>
       ${subtitleLinesSvg}
     </g>
-    <rect x="0" y="${STRIP_H - 10}" width="${WIDTH}" height="10" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${STRIP_H - 10}" width="${progressWidth}" height="10" fill="${pal.pillFill}"/>
+    <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
+    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
-  await sharp(Buffer.from(hudSvg))
-    .png({ compressionLevel: 1 })
+  await sharp(photoBuffer)
+    .composite([{ input: Buffer.from(hudSvg), top: 0, left: 0 }])
+    .jpeg({ quality: 84 })
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 4.0 REAL VIDEO Master Timeline Renderer (Guaranteed <12s total render time on Vercel!)
+// Single-Pass Studio 4.0 Master Timeline Renderer (14 Real Photos HD + Clean Karaoke Subtitles — finishes in ~10s!)
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -634,13 +623,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const palette = getAtmospherePalette(colorTheme);
 
-  onProgress(15, 'Studio 4.0: Baixando Vídeos Reais HD + Gravando Vozes Simultaneamente...');
+  onProgress(15, 'Studio 4.0: Baixando 14 Fotos Reais HD + Gravando Vozes Simultaneamente...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Run ALL Neural Voice Synthesis AND Real Video Discovery + 3 Camera Take Downloads AT THE EXACT SAME TIME!
+  // 1. Run ALL Neural Voice Synthesis AND 14 Real Photo Downloads AT THE EXACT SAME TIME!
   const ttsJobsPromise = Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     let sceneVoice = voiceName;
@@ -654,30 +643,35 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     return { audioWavPath, ttsResult };
   }));
 
-  const realVideoTakesPromise = (async () => {
-    const queues = await prefetchTopicPhotoUrlsForScenes(scriptData);
-    // Download 3 distinct Real Video Camera Takes (.mov/.webm) in parallel while TTS is still synthesizing!
-    return Promise.all([0, 1, 2].map(async (takeIdx) => {
-      const qObj = queues[takeIdx] || queues[0] || { videoQueue: [] };
-      const rawClipPath = path.join(tmpDir, `take_vid_${takeIdx}.mov`);
-      return downloadRealVideoClipToDisk(qObj.videoQueue, rawClipPath, takeIdx);
+  const photosPreparePromise = (async () => {
+    const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
+    return Promise.all(scenes.map(async (_, i) => {
+      const pQ = photoQueues[i] || photoQueues[0] || { queueA: [], queueB: [] };
+      const [photoBufA, photoBufB] = await Promise.all([
+        prepareScenePhotoBuffer(pQ.queueA, colorTheme),
+        prepareScenePhotoBuffer(pQ.queueB, colorTheme)
+      ]);
+      return { photoBufA, photoBufB };
     }));
   })();
 
-  const [ttsResults, downloadedTakePaths] = await Promise.all([
+  const [ttsResults, scenePhotoBuffers] = await Promise.all([
     ttsJobsPromise,
-    realVideoTakesPromise
+    photosPreparePromise
   ]);
 
-  onProgress(55, 'Sincronizando Clipes de Vídeo Reais (Drone / Câmera)...');
+  onProgress(52, 'Sincronizando 14 Fotos Reais HD com as Vozes...');
 
   for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult } = ttsResults[i];
+    const { photoBufA, photoBufB } = scenePhotoBuffers[i];
     sceneStartTimes.push(totalDuration);
     sceneAssets.push({
       index: i,
       narration: scenes[i].narration,
       audioWavPath,
+      photoBufA,
+      photoBufB,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries
     });
@@ -699,9 +693,9 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(70, 'Gerando Faixa Transparente de Legendas Karaokê...');
+  onProgress(68, 'Renderizando Quadros 720x1280 HD + Legendas Karaokê...');
 
-  const masterFramesListPath = path.join(tmpDir, 'master_subs.txt');
+  const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
   let lastRenderedFramePath = null;
@@ -710,15 +704,23 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
     const timedChunks = buildExactTimedChunks(asset.narration, asset.wordBoundaries, asset.duration);
+    const halfIdx = Math.max(1, Math.floor(timedChunks.length / 2));
     let sceneElapsed = 0;
 
+    // On the final loop scene, use Scene 1's Photo A in the 2nd half so the visual loop to 0:00 is seamless!
+    const isLastScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
+    const secondHalfBuf = isLastScene ? sceneAssets[0].photoBufA : asset.photoBufB;
+
     for (let c = 0; c < timedChunks.length; c++) {
-      const framePath = path.join(tmpDir, `sub_${i}_${c}.png`);
+      const framePath = path.join(tmpDir, `frame_${i}_${c}.jpg`);
       const thisChunkDur = timedChunks[c].duration;
       sceneElapsed += thisChunkDur;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
 
+      const photoBuffer = (c < halfIdx) ? asset.photoBufA : secondHalfBuf;
+
       frameJobs.push({
+        photoBuffer,
         wordsChunk: timedChunks[c].words,
         activeWordIdx: timedChunks[c].activeWordIdx,
         palette,
@@ -735,8 +737,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
-  // Render all transparent 480x360 PNG subtitle strips in parallel (takes ~0.22 seconds!)
-  const BATCH_SIZE = 36;
+  // Render all 720x1280 JPEG frames in parallel batches
+  const BATCH_SIZE = 28;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
@@ -746,7 +748,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(84, 'Renderizando Vídeo Real + Legendas + Voz Shure SM7B...');
+  onProgress(86, 'Masterizando Vídeo 720x1280 HD + Voz Shure SM7B...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -757,50 +759,21 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // Split total duration across 3 continuous Real Video Camera Takes (Act 1: Hook/Setup, Act 2: Climax, Act 3: Payoff/Loop)
-  const take1Dur = Math.max(4.0, totalDuration * 0.34);
-  const take2Dur = Math.max(4.0, totalDuration * 0.36);
-  const take3Dur = Math.max(4.0, totalDuration - take1Dur - take2Dur + 0.5);
-  const takeDurs = [take1Dur, take2Dur, take3Dur];
-
-  const fpsRate = process.env.VERCEL ? '15' : '20';
-  const ffmpegArgs = ['-y'];
-
-  for (let tIdx = 0; tIdx < 3; tIdx++) {
-    const clipFile = downloadedTakePaths[tIdx] || downloadedTakePaths[0];
-    ffmpegArgs.push('-stream_loop', '-1', '-t', takeDurs[tIdx].toFixed(4), '-i', clipFile);
-  }
-
-  ffmpegArgs.push(
+  const ffmpegArgs = [
+    '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
     '-i', masterVoiceWavPath,
-    '-i', bgMusicWav
-  );
-
-  const vChains = [0, 1, 2].map(k =>
-    `[${k}:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,fps=${fpsRate},setsar=1,format=yuv420p[v${k}]`
-  ).join(';');
-
-  const filterComplex = [
-    vChains,
-    `[v0][v1][v2]concat=n=3:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=634:w=${WIDTH}:h=220:color=black@0.36:t=fill[bg]`,
-    `[3:v]format=yuva420p[subs]`,
-    `[bg][subs]overlay=0:634:format=yuv420:shortest=1[vout]`,
-    `[4:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice]`,
-    `[5:a]volume=0.33[bgm]`,
-    `[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
-  ].join(';');
-
-  ffmpegArgs.push(
-    '-filter_complex', filterComplex,
-    '-map', '[vout]',
+    '-i', bgMusicWav,
+    '-filter_complex',
+    '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
+    '-map', '0:v',
     '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', fpsRate,
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-r', '24',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
     finalMp4Path
-  );
+  ];
 
   execFileSync(ffmpegPath, ffmpegArgs, { stdio: 'ignore' });
 
