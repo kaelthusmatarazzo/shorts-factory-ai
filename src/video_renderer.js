@@ -225,11 +225,11 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 
   const addVideoCandidate = (url, title = '') => {
     if (!url || seenUrls.has(url)) return;
-    const checkStr = `${url} ${title}`.toLowerCase();
+    const checkStr = String(title || '').toLowerCase();
     // Block talking heads, conferences, tutorials, maps, and non-cinematic clips
-    if (/wikimania|conference|interview|lecture|speech|pronunciation|sign_language|screencast|tutorial|wikipedia|commons|icon|logo|flag|map|chart|graph|diagram|uruguay|policia|municipio|alcaldia|speaker|talk|presentation|webcam|test/i.test(checkStr)) return;
+    if (/wikimania|conference|interview|lecture|speech|pronunciation|sign_language|screencast|tutorial|icon|logo|flag|map|chart|graph|diagram|uruguay|policia|municipio|alcaldia|speaker|talk|presentation|webcam|animation/i.test(checkStr)) return;
     seenUrls.add(url);
-    pool.push({ url, title: String(title || '').toLowerCase() });
+    pool.push({ url, title: checkStr });
   };
 
   // 1. Fast PT Wikipedia Lookup to get English topic title (1.8s timeout)
@@ -314,6 +314,18 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       }
     })()
   ]);
+
+  // Guaranteed high-cinema real camera/drone .mov backup bank
+  const verifiedRealCameraClips = [
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/5/53/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/1/10/Fagradalsfjall_volcano_eruption_%28helicopter_view%29.webm/Fagradalsfjall_volcano_eruption_%28helicopter_view%29.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3a/Hawaii_Mount_Kilauea%27s_eruption_opens_new_lava_vent.webm/Hawaii_Mount_Kilauea%27s_eruption_opens_new_lava_vent.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e5/Cliffs_of_Moher_drone-video.webm/Cliffs_of_Moher_drone-video.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/d/dc/Aerial_view_of_sand_beach_sea_waves_drone_footage.webm/Aerial_view_of_sand_beach_sea_waves_drone_footage.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ea/Spinner_dolphins_swimming_in_the_Indian_ocean.webm/Spinner_dolphins_swimming_in_the_Indian_ocean.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/33/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm.360p.mpeg4.mov'
+  ];
+  for (const vUrl of verifiedRealCameraClips) addVideoCandidate(vUrl, 'verified_real_camera_footage');
 
   const enTitle = enTitleClean || enTitleFull;
   console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov/.webm) encontrados!`);
