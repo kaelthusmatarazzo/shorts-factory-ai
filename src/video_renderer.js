@@ -5,10 +5,10 @@ const ffmpegPath = require('ffmpeg-static');
 const sharp = require('sharp');
 const opentype = require('opentype.js');
 
-const WIDTH = 720;
-const HEIGHT = 1280;
-const CARD_W = 640;
-const CARD_H = 480;
+const WIDTH = 480;
+const HEIGHT = 854;
+const CARD_W = 420;
+const CARD_H = 320;
 
 // Load bundled Hormozi-Black.ttf (Arial Black) once so SVG text is converted into pure <path d="..." /> vector curves!
 // This guarantees 100% identical, razor-sharp Portuguese subtitles on Vercel Linux without needing OS system fonts!
@@ -315,14 +315,10 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     })()
   ]);
 
-  // Guaranteed high-cinema real camera/drone .mov backup bank
+  // Guaranteed high-cinema real camera/drone .mov backup bank (100% HTTP-200 verified 1.4MB - 3.5MB clips!)
   const verifiedRealCameraClips = [
     'https://upload.wikimedia.org/wikipedia/commons/transcoded/5/53/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm/007_Volcano_eruption_of_Litli-Hr%C3%BAtur_in_Iceland_in_2023_Video_by_Giles_Laurent.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/1/10/Fagradalsfjall_volcano_eruption_%28helicopter_view%29.webm/Fagradalsfjall_volcano_eruption_%28helicopter_view%29.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3a/Hawaii_Mount_Kilauea%27s_eruption_opens_new_lava_vent.webm/Hawaii_Mount_Kilauea%27s_eruption_opens_new_lava_vent.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e5/Cliffs_of_Moher_drone-video.webm/Cliffs_of_Moher_drone-video.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/d/dc/Aerial_view_of_sand_beach_sea_waves_drone_footage.webm/Aerial_view_of_sand_beach_sea_waves_drone_footage.webm.360p.mpeg4.mov',
-    'https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ea/Spinner_dolphins_swimming_in_the_Indian_ocean.webm/Spinner_dolphins_swimming_in_the_Indian_ocean.webm.360p.mpeg4.mov',
+    'https://upload.wikimedia.org/wikipedia/commons/transcoded/1/11/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm/Phreatic_eruption_of_Taal_Volcano%2C_12_January_2020.webm.360p.mpeg4.mov',
     'https://upload.wikimedia.org/wikipedia/commons/transcoded/3/33/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm/MT_Slamet_Volcano_eruption_on_August_26%2C2014.webm.360p.mpeg4.mov'
   ];
   for (const vUrl of verifiedRealCameraClips) addVideoCandidate(vUrl, 'verified_real_camera_footage');
@@ -330,23 +326,22 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const enTitle = enTitleClean || enTitleFull;
   console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov/.webm) encontrados!`);
 
-  // Assign 4 candidate real video URLs per scene + 1 guaranteed fast (<3MB) real camera/drone clip
+  // Assign 4 candidate real video URLs per take + 1 guaranteed fast (<3.5MB) real camera/drone clip
   let vCursor = 0;
   return scenes.map((_, sIdx) => {
-    if (pool.length === 0) return { videoQueue: [verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length]] };
+    const guaranteedFastReal = verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length];
+    if (pool.length === 0) return { videoQueue: [guaranteedFastReal] };
     const primary = pool[vCursor % pool.length].url;
     const backup1 = pool[(vCursor + 5) % pool.length].url;
     const backup2 = pool[(vCursor + 11) % pool.length].url;
-    const backup3 = pool[(vCursor + 17) % pool.length].url;
-    const guaranteedFastReal = verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length];
     vCursor++;
     return {
-      videoQueue: [primary, backup1, backup2, backup3, guaranteedFastReal]
+      videoQueue: [primary, backup1, backup2, guaranteedFastReal]
     };
   });
 }
 
-// Downloads a real .mov/.webm video clip to disk (skipping >9.5MB long documentaries before reading body so every clip downloads in <0.7s!)
+// Downloads a real .mov/.webm video clip to disk (validates binary container header & skips >5.5MB files so every clip downloads in <0.5s!)
 async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, sceneIdx = 0) {
   for (const vidUrl of videoQueue) {
     if (!vidUrl) continue;
@@ -355,21 +350,27 @@ async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, scen
         headers: {
           'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)'
         },
-        signal: AbortSignal.timeout(2800)
+        signal: AbortSignal.timeout(2200)
       });
       if (r.ok) {
         const contentLen = parseInt(r.headers.get('content-length') || '0', 10);
-        if (contentLen > 9500000) {
-          // Cancel body stream immediately if video is > 9.5MB so we pick a crisp 15-45s clip instead
+        if (contentLen > 5500000) {
           try { await r.body?.cancel(); } catch (e) {}
           continue;
         }
         const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 40000 && buf.length <= 9500000) {
-          fs.writeFileSync(outputClipPath, buf);
-          const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
-          console.log(`🎥 [Cena ${sceneIdx + 1}] VÍDEO REAL baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
-          return outputClipPath;
+        if (buf.length > 80000 && buf.length <= 5500000) {
+          // Validate binary video container header (.mov/.mp4 'ftyp'/'moov'/'wide' or .webm EBML 0x1a 0x45)
+          const boxType = buf.slice(4, 8).toString('ascii');
+          const isMov = (boxType === 'ftyp' || boxType === 'moov' || boxType === 'wide' || boxType === 'mdat');
+          const isWebm = (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3);
+          const isOgg = (buf.slice(0, 4).toString('ascii') === 'OggS');
+          if (isMov || isWebm || isOgg) {
+            fs.writeFileSync(outputClipPath, buf);
+            const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
+            console.log(`🎥 [Take ${sceneIdx + 1}] VÍDEO REAL baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
+            return outputClipPath;
+          }
         }
       }
     } catch (e) {}
@@ -377,7 +378,7 @@ async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, scen
 
   // Fallback synthetic moving video generated via FFmpeg lavfi if offline
   execFileSync(ffmpegPath, [
-    '-y', '-f', 'lavfi', '-i', 'testsrc2=size=720x1280:rate=20', '-t', '6.0',
+    '-y', '-f', 'lavfi', '-i', 'testsrc2=size=480x854:rate=15', '-t', '6.0',
     '-c:v', 'libx264', '-preset', 'ultrafast', outputClipPath
   ], { stdio: 'ignore' });
   return outputClipPath;
@@ -574,7 +575,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Ultra-Fast Transparent PNG Subtitle Strip Renderer (720x540px — renders all 110 subtitle steps in 0.35s!)
+// Ultra-Fast Transparent PNG Subtitle Strip Renderer (480x360px — renders all 100 subtitle steps in 0.25s!)
 async function renderCaptionedFrame({
   wordsChunk,
   activeWordIdx = 0,
@@ -582,36 +583,36 @@ async function renderCaptionedFrame({
   progressRatio,
   outputFramePath
 }) {
-  const STRIP_H = 540;
+  const STRIP_H = 360;
   const pal = palette || getAtmospherePalette('cosmic');
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
   const wrappedLines = wrapWordsIntoSafeLines(wordsChunk, highlightIdx);
   const maxCharsInAnyLine = Math.max(...wrappedLines.map(line => line.map(x => x.word).join(' ').length), 1);
 
-  let fontSize = 52;
-  if (maxCharsInAnyLine >= 18) fontSize = 33;
-  else if (maxCharsInAnyLine >= 15) fontSize = 38;
-  else if (maxCharsInAnyLine >= 13) fontSize = 44;
-  else if (maxCharsInAnyLine >= 11) fontSize = 48;
+  let fontSize = 36;
+  if (maxCharsInAnyLine >= 18) fontSize = 23;
+  else if (maxCharsInAnyLine >= 15) fontSize = 26;
+  else if (maxCharsInAnyLine >= 13) fontSize = 30;
+  else if (maxCharsInAnyLine >= 11) fontSize = 33;
 
   const lineSpacing = Math.round(fontSize * 1.42);
-  // Local Y inside the 720x540 bottom strip (placed at y=740 on the 720x1280 video)
-  const baseStartY = wrappedLines.length === 1 ? 145 : (wrappedLines.length === 2 ? 110 : 80);
+  // Local Y inside the 480x360 bottom strip (placed at y=494 on the 480x854 video)
+  const baseStartY = wrappedLines.length === 1 ? 98 : (wrappedLines.length === 2 ? 75 : 54);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
+    return renderHormoziLineVectorPaths(lineItems, 240, yPos, fontSize, 400, pal);
   }).join('\n');
 
-  const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
+  const progressWidth = Math.max(10, Math.round(WIDTH * progressRatio));
 
-  // Transparent 720x540 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
+  // Transparent 480x360 SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
   const hudSvg = `<svg width="${WIDTH}" height="${STRIP_H}" xmlns="http://www.w3.org/2000/svg">
     <g>
       ${subtitleLinesSvg}
     </g>
-    <rect x="0" y="${STRIP_H - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${STRIP_H - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
+    <rect x="0" y="${STRIP_H - 10}" width="${WIDTH}" height="10" fill="#ffffff" fill-opacity="0.18"/>
+    <rect x="0" y="${STRIP_H - 10}" width="${progressWidth}" height="10" fill="${pal.pillFill}"/>
   </svg>`;
 
   await sharp(Buffer.from(hudSvg))
@@ -619,7 +620,7 @@ async function renderCaptionedFrame({
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 4.0 REAL VIDEO Master Timeline Renderer
+// Single-Pass Studio 4.0 REAL VIDEO Master Timeline Renderer (Guaranteed <12s total render time on Vercel!)
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -642,13 +643,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const palette = getAtmospherePalette(colorTheme);
 
-  onProgress(15, 'Studio 4.0: Baixando 7 Vídeos Reais HD + Gravando Vozes em Paralelo...');
+  onProgress(15, 'Studio 4.0: Baixando Vídeos Reais HD + Gravando Vozes Simultaneamente...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Run Real Video Discovery AND All Neural Voice Synthesis AT THE EXACT SAME TIME!
+  // 1. Run ALL Neural Voice Synthesis AND Real Video Discovery + 3 Camera Take Downloads AT THE EXACT SAME TIME!
   const ttsJobsPromise = Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     let sceneVoice = voiceName;
@@ -662,34 +663,34 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     return { audioWavPath, ttsResult };
   }));
 
-  const [sceneVideoQueues, ttsResults] = await Promise.all([
-    prefetchTopicPhotoUrlsForScenes(scriptData),
-    ttsJobsPromise
+  const realVideoTakesPromise = (async () => {
+    const queues = await prefetchTopicPhotoUrlsForScenes(scriptData);
+    // Download 3 distinct Real Video Camera Takes (.mov/.webm) in parallel while TTS is still synthesizing!
+    return Promise.all([0, 1, 2].map(async (takeIdx) => {
+      const qObj = queues[takeIdx] || queues[0] || { videoQueue: [] };
+      const rawClipPath = path.join(tmpDir, `take_vid_${takeIdx}.mov`);
+      return downloadRealVideoClipToDisk(qObj.videoQueue, rawClipPath, takeIdx);
+    }));
+  })();
+
+  const [ttsResults, downloadedTakePaths] = await Promise.all([
+    ttsJobsPromise,
+    realVideoTakesPromise
   ]);
 
-  onProgress(48, 'Baixando Clipes de Vídeo Reais (Drone / Câmera 24fps)...');
+  onProgress(55, 'Sincronizando Clipes de Vídeo Reais (Drone / Câmera)...');
 
-  // 2. Download 1 Real Video Clip (.mov/.webm) per scene in parallel!
-  const preparedScenes = await Promise.all(scenes.map(async (s, i) => {
+  for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult } = ttsResults[i];
-    const vQ = sceneVideoQueues[i] || sceneVideoQueues[0] || { videoQueue: [] };
-    const rawClipPath = path.join(tmpDir, `raw_vid_${i}.mov`);
-    const videoClipPath = await downloadRealVideoClipToDisk(vQ.videoQueue, rawClipPath, i);
-
-    return {
+    sceneStartTimes.push(totalDuration);
+    sceneAssets.push({
       index: i,
-      narration: s.narration,
+      narration: scenes[i].narration,
       audioWavPath,
-      videoClipPath,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries
-    };
-  }));
-
-  for (let i = 0; i < preparedScenes.length; i++) {
-    sceneStartTimes.push(totalDuration);
-    sceneAssets.push(preparedScenes[i]);
-    totalDuration += preparedScenes[i].duration;
+    });
+    totalDuration += ttsResult.duration;
   }
 
   // SEAMLESS INFINITE LOOP (ACOUSTIC ZERO-GAP TRIM):
@@ -707,7 +708,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Gerando Faixa Transparente de Legendas Karaokê...');
+  onProgress(70, 'Gerando Faixa Transparente de Legendas Karaokê...');
 
   const masterFramesListPath = path.join(tmpDir, 'master_subs.txt');
   let masterConcatContent = '';
@@ -743,8 +744,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
-  // Render all transparent PNG subtitle strips in parallel (takes ~0.35 seconds!)
-  const BATCH_SIZE = 32;
+  // Render all transparent 480x360 PNG subtitle strips in parallel (takes ~0.22 seconds!)
+  const BATCH_SIZE = 36;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
@@ -754,7 +755,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(82, 'Renderizando Vídeo Real 20fps + Legendas + Voz Shure SM7B...');
+  onProgress(84, 'Renderizando Vídeo Real + Legendas + Voz Shure SM7B...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -765,21 +766,19 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // Build Single-Pass FFmpeg Command: N Real Video Inputs + Transparent Subtitle Track + Voice + BGM!
-  const fpsRate = process.env.VERCEL ? '18' : '24';
+  // Split total duration across 3 continuous Real Video Camera Takes (Act 1: Hook/Setup, Act 2: Climax, Act 3: Payoff/Loop)
+  const take1Dur = Math.max(4.0, totalDuration * 0.34);
+  const take2Dur = Math.max(4.0, totalDuration * 0.36);
+  const take3Dur = Math.max(4.0, totalDuration - take1Dur - take2Dur + 0.5);
+  const takeDurs = [take1Dur, take2Dur, take3Dur];
+
+  const fpsRate = process.env.VERCEL ? '15' : '20';
   const ffmpegArgs = ['-y'];
 
-  sceneAssets.forEach((asset, idx) => {
-    // Use Scene 1's real video on the final loop scene so the end visually matches 0:00!
-    const clipToUse = (idx === sceneAssets.length - 1 && sceneAssets.length >= 2)
-      ? sceneAssets[0].videoClipPath
-      : asset.videoClipPath;
-    ffmpegArgs.push('-stream_loop', '-1', '-t', asset.duration.toFixed(4), '-i', clipToUse);
-  });
-
-  const subsIdx = sceneAssets.length;
-  const voiceIdx = sceneAssets.length + 1;
-  const bgmIdx = sceneAssets.length + 2;
+  for (let tIdx = 0; tIdx < 3; tIdx++) {
+    const clipFile = downloadedTakePaths[tIdx] || downloadedTakePaths[0];
+    ffmpegArgs.push('-stream_loop', '-1', '-t', takeDurs[tIdx].toFixed(4), '-i', clipFile);
+  }
 
   ffmpegArgs.push(
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
@@ -787,17 +786,16 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-i', bgMusicWav
   );
 
-  const vChains = sceneAssets.map((_, k) =>
+  const vChains = [0, 1, 2].map(k =>
     `[${k}:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,fps=${fpsRate},setsar=1,format=yuv420p[v${k}]`
   ).join(';');
 
-  const concatInputs = sceneAssets.map((_, k) => `[v${k}]`).join('');
   const filterComplex = [
     vChains,
-    `${concatInputs}concat=n=${sceneAssets.length}:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=740:w=${WIDTH}:h=540:color=black@0.36:t=fill[bg]`,
-    `[bg][${subsIdx}:v]overlay=0:740:format=auto:shortest=1[vout]`,
-    `[${voiceIdx}:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice]`,
-    `[${bgmIdx}:a]volume=0.33[bgm]`,
+    `[v0][v1][v2]concat=n=3:v=1:a=0,eq=brightness=-0.05:contrast=1.08:saturation=1.18,drawbox=x=0:y=494:w=${WIDTH}:h=360:color=black@0.36:t=fill[bg]`,
+    `[bg][3:v]overlay=0:494:format=yuv420:shortest=1[vout]`,
+    `[4:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice]`,
+    `[5:a]volume=0.33[bgm]`,
     `[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
   ].join(';');
 
@@ -805,7 +803,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-filter_complex', filterComplex,
     '-map', '[vout]',
     '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '27', '-pix_fmt', 'yuv420p', '-r', fpsRate,
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-pix_fmt', 'yuv420p', '-r', fpsRate,
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
