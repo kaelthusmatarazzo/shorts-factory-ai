@@ -31,9 +31,12 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
 
   try {
     const tts = new MsEdgeTTS();
-    await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
-      wordBoundaryEnabled: true
-    });
+    await Promise.race([
+      tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
+        wordBoundaryEnabled: true
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 3500))
+    ]);
 
     const { audioStream, metadataStream } = tts.toStream(text, prosodyOptions);
 
@@ -64,7 +67,7 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
 
     await new Promise((resolve, reject) => {
       const chunks = [];
-      const timeout = setTimeout(() => reject(new Error('Edge TTS timeout')), 14000);
+      const timeout = setTimeout(() => reject(new Error('Edge TTS timeout')), 4200);
       audioStream.on('data', chunk => chunks.push(chunk));
       audioStream.on('end', () => {
         clearTimeout(timeout);
