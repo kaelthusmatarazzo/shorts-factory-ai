@@ -223,14 +223,14 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const pool = [];
   const seenUrls = new Set();
 
-  const addCandidate = (url, title = '') => {
+  const addCandidate = (url, title = '', isGif = false) => {
     if (!url || seenUrls.has(url)) return;
-    if (/\.(svg|gif|tif|tiff|webm|ogv|pdf|djvu)$/i.test(url)) return;
+    if (/\.(svg|tif|tiff|ogv|pdf|djvu)$/i.test(url)) return;
     const checkStr = `${url} ${title}`.toLowerCase();
-    // Block icons, maps, flags, AND municipal/urban homonyms (e.g., Pando city in Uruguay!)
-    if (/icon|logo|symbol|flag|map_of|locator_map|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of/i.test(checkStr)) return;
+    // Block icons, maps, flags, diagrams, AND municipal/urban homonyms
+    if (/icon|logo|symbol|flag|map_of|locator_map|commons-logo|red_pencil|disambig|question_book|ambox|padlock|crystal_clear|nuvola|uruguay|policia|municipio|alcaldia|pintura_mural|acto_|bienvenido_a|partido_|eleccion|coat_of_arms|escudo|bandera|stamp_of|spinner|loading|arrow|button/i.test(checkStr)) return;
     seenUrls.add(url);
-    pool.push({ url, title: String(title || '').toLowerCase() });
+    pool.push({ url, title: String(title || '').toLowerCase(), isGif: Boolean(isGif || /\.gif$/i.test(url)) });
   };
 
   if (heroUrl) addCandidate(heroUrl, `${rawTopic} hero`);
@@ -256,7 +256,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Run English Wikipedia Article Images + Wikimedia Commons Search IN PARALLEL (max 2.5s total!)
+  // 2. Run English Wikipedia Article Media + Wikimedia Animated GIFs + High-Res Photos IN PARALLEL (max 2.5s total!)
   const exactArticleTarget = enTitleFull || scriptData.wikiSearch || fullSourceTopic;
   const entitySet = new Set();
   if (disambiguatedTerm) entitySet.add(disambiguatedTerm);
@@ -270,10 +270,29 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   if (entitySet.size === 0) entitySet.add(rawTopic);
   const uniqueEntities = Array.from(entitySet).slice(0, 4);
   const orQuery = 'filetype:bitmap ' + uniqueEntities.map(e => `"${e}"`).join(' OR ');
+  const gifQuery = 'filetype:gif ' + uniqueEntities.slice(0, 2).map(e => `"${e}"`).join(' OR ');
 
   await Promise.allSettled([
+    // 2A. Animated GIFs Search on Wikimedia Commons (Real Motion Clips!)
     (async () => {
-      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=28&prop=imageinfo&iiprop=url&iiurlwidth=800&redirects=1&format=json`;
+      const gifCommonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(gifQuery)}&gsrlimit=18&prop=imageinfo&iiprop=url|size&format=json`;
+      const gRes = await fetch(gifCommonsUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
+        signal: AbortSignal.timeout(2300)
+      });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        for (const p of Object.values(gData.query?.pages || {})) {
+          const info = p?.imageinfo?.[0];
+          if (info?.url && /\.gif$/i.test(info.url) && (!info.size || info.size < 6800000) && (!info.size || info.size > 25000)) {
+            addCandidate(info.url, p.title || '', true);
+          }
+        }
+      }
+    })(),
+    // 2B. Exact English Wikipedia Article Embedded Media
+    (async () => {
+      const enArtImgsUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(exactArticleTarget)}&generator=images&gimlimit=28&prop=imageinfo&iiprop=url|size&iiurlwidth=800&redirects=1&format=json`;
       const enArtRes = await fetch(enArtImgsUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
         signal: AbortSignal.timeout(2400)
@@ -281,11 +300,14 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       if (enArtRes.ok) {
         const enArtData = await enArtRes.json();
         for (const p of Object.values(enArtData.query?.pages || {})) {
-          const imgUrl = p?.imageinfo?.[0]?.thumburl || p?.imageinfo?.[0]?.url;
-          addCandidate(imgUrl, p.title || exactArticleTarget);
+          const info = p?.imageinfo?.[0];
+          const isOrigGif = info?.url && /\.gif$/i.test(info.url) && (!info.size || info.size < 6800000);
+          const imgUrl = isOrigGif ? info.url : (info?.thumburl || info?.url);
+          addCandidate(imgUrl, p.title || exactArticleTarget, isOrigGif);
         }
       }
     })(),
+    // 2C. Wikimedia Commons High-Res Scientific Photos & Media
     (async () => {
       const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(orQuery)}&gsrlimit=45&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`;
       const cRes = await fetch(commonsUrl, {
@@ -303,9 +325,10 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   ]);
 
   const enTitle = enTitleClean || enTitleFull;
-  console.log(`📸 [Studio 2.0 Dual-Shot Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} fotos reais verificadas!`);
+  const gifCount = pool.filter(x => x.isGif).length;
+  console.log(`🎬 [Motion Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} mídias reais (${gifCount} GIFs animados)!`);
 
-  // 3. Assign TWO distinct photo queues (shotAQueue for 0-50%, shotBQueue for 50-100%) to every scene!
+  // 3. Assign TWO distinct media queues (shotAQueue for 0-50%, shotBQueue for 50-100%) prioritizing Animated GIFs!
   const usedIndices = new Set();
   const sceneDualQueues = scenes.map((s, sceneIdx) => {
     const keywords = `${s.imageQuery || ''} ${s.sceneLabel || ''} ${s.narration || ''}`
@@ -316,7 +339,8 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 
     const scoreAvailablePool = () => pool.map((item, idx) => {
       let score = usedIndices.has(idx) ? -1000 : 0;
-      if (sceneIdx === 0 && idx === 0 && !usedIndices.has(0)) score += 600;
+      if (item.isGif) score += 115; // Prioritize real Animated GIFs!
+      if (sceneIdx === 0 && idx === 0 && !usedIndices.has(0)) score += 500;
       for (const kw of keywords) {
         if (item.title.includes(kw)) score += 25;
       }
@@ -342,20 +366,38 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   return sceneDualQueues;
 }
 
+// Downloads either a multi-frame Animated GIF (.gif) or a High-Res Photo and returns up to 4 extracted raw frames!
 async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag = 'A') {
   for (const imgUrl of urlQueue) {
     if (!imgUrl) continue;
     try {
       const r = await fetch(imgUrl, {
         headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(4500)
+        signal: AbortSignal.timeout(4200)
       });
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer());
         if (buf.length > 5500) {
+          const meta = await sharp(buf, { animated: false }).metadata();
+          if (meta.pages && meta.pages > 1) {
+            const pCount = meta.pages;
+            const pageIdxs = [
+              0,
+              Math.min(pCount - 1, Math.floor(pCount * 0.18)),
+              Math.min(pCount - 1, Math.floor(pCount * 0.36)),
+              Math.min(pCount - 1, Math.floor(pCount * 0.54)),
+              Math.min(pCount - 1, Math.floor(pCount * 0.72)),
+              Math.min(pCount - 1, Math.floor(pCount * 0.90))
+            ];
+            const gifFrames = await Promise.all(
+              pageIdxs.map(p => sharp(buf, { page: p }).png().toBuffer())
+            );
+            console.log(`🎞️ [Cena ${sceneIdx + 1}-${shotTag}] GIF ANIMADO REAL (${pCount} frames): ${imgUrl.split('/').pop().slice(0, 38)}`);
+            return { isAnimatedGif: true, frames: gifFrames };
+          }
           const normalized = await sharp(buf).png().toBuffer();
-          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Foto real: ${imgUrl.split('/').pop().slice(0, 40)} (${Math.round(buf.length / 1024)} KB)`);
-          return normalized;
+          console.log(`✅ [Cena ${sceneIdx + 1}-${shotTag}] Mídia real: ${imgUrl.split('/').pop().slice(0, 40)} (${Math.round(buf.length / 1024)} KB)`);
+          return { isAnimatedGif: false, frames: [normalized] };
         }
       }
     } catch (e) {}
@@ -371,43 +413,22 @@ async function downloadAssignedTopicPhoto(urlQueue = [], sceneIdx = 0, shotTag =
     <rect width="100%" height="100%" fill="url(#g)"/>
     <circle cx="320" cy="240" r="160" fill="#00f0ff" fill-opacity="0.2"/>
   </svg>`;
-  return await sharp(Buffer.from(fallbackSvg)).png().toBuffer();
+  const fbBuf = await sharp(Buffer.from(fallbackSvg)).png().toBuffer();
+  return { isAnimatedGif: false, frames: [fbBuf] };
 }
 
-// Pre-build a composited base 720x1280 canvas (Cinema Full-Screen 9:16 or Framed Card) for ultra-fast frame rendering
-async function buildBaseSceneCanvas(rawPhotoBuffer, blurredBackdropBuffer, zoomFactor = 1.0, visualStyle = 'cinema', themeColor = '#00f0ff') {
+// Fast 6-Frame Motion Generator (Plays Real Animated GIF Frames OR Single-Pass 6-Step Camera Pan/Zoom!)
+async function buildMotionSequenceForMedia(mediaObj, blurredBackdropBuffer, visualStyle = 'cinema', themeColor = '#00f0ff', panDirection = 1) {
   const isCinema = visualStyle !== 'card';
   const boxW = isCinema ? 688 : CARD_W;
   const boxH = isCinema ? 930 : CARD_H;
   const boxLeft = isCinema ? 16 : 40;
   const boxTop = isCinema ? 132 : 158;
 
-  const scaledW = Math.round(boxW * zoomFactor);
-  const scaledH = Math.round(boxH * zoomFactor);
-
-  const resizedPhoto = await sharp(rawPhotoBuffer)
-    .resize(scaledW, scaledH, { fit: 'cover', position: 'centre' })
-    .extract({
-      left: Math.floor((scaledW - boxW) / 2),
-      top: Math.floor((scaledH - boxH) / 2),
-      width: boxW,
-      height: boxH
-    })
-    .sharpen({ sigma: 0.85 })
-    .modulate({ brightness: 1.04, saturation: 1.14 })
-    .png()
-    .toBuffer();
-
   const roundedMask = Buffer.from(
     `<svg width="${boxW}" height="${boxH}"><rect x="0" y="0" width="${boxW}" height="${boxH}" rx="28" ry="28" fill="#fff"/></svg>`
   );
 
-  const roundedPhotoCard = await sharp(resizedPhoto)
-    .composite([{ input: roundedMask, blend: 'dest-in' }])
-    .png()
-    .toBuffer();
-
-  // Subtle dark cinema gradient at the bottom of the photo card so subtitles and labels have 100% contrast
   const cardShadowOverlay = Buffer.from(
     `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -424,13 +445,66 @@ async function buildBaseSceneCanvas(rawPhotoBuffer, blurredBackdropBuffer, zoomF
     </svg>`
   );
 
-  return await sharp(blurredBackdropBuffer)
-    .composite([
-      { input: roundedPhotoCard, left: boxLeft, top: boxTop },
-      { input: cardShadowOverlay, left: 0, top: 0 }
-    ])
-    .jpeg({ quality: 92 })
+  const composeCardBuffer = async (croppedCardBuf) => {
+    const roundedPhotoCard = await sharp(croppedCardBuf)
+      .composite([{ input: roundedMask, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+    return await sharp(blurredBackdropBuffer)
+      .composite([
+        { input: roundedPhotoCard, left: boxLeft, top: boxTop },
+        { input: cardShadowOverlay, left: 0, top: 0 }
+      ])
+      .jpeg({ quality: 89 })
+      .toBuffer();
+  };
+
+  // CASE A: Real Multi-Frame Animated GIF (.gif)!
+  if (mediaObj.isAnimatedGif && mediaObj.frames && mediaObj.frames.length > 1) {
+    return await Promise.all(mediaObj.frames.map(async (gifFrameBuf, idx) => {
+      const z = 1.02 + idx * 0.012;
+      const sW = Math.round(boxW * z);
+      const sH = Math.round(boxH * z);
+      const cropped = await sharp(gifFrameBuf)
+        .resize(sW, sH, { fit: 'cover', position: 'centre' })
+        .extract({
+          left: Math.floor((sW - boxW) / 2),
+          top: Math.floor((sH - boxH) / 2),
+          width: boxW,
+          height: boxH
+        })
+        .modulate({ brightness: 1.04, saturation: 1.15 })
+        .png()
+        .toBuffer();
+      return await composeCardBuffer(cropped);
+    }));
+  }
+
+  // CASE B: High-Res Scientific Photo -> Sharpen ONCE at 1.15x, then slice 6 smooth Camera Pan/Zoom motion frames!
+  const rawPhotoBuffer = (mediaObj.frames && mediaObj.frames[0]) ? mediaObj.frames[0] : mediaObj;
+  const masterW = Math.round(boxW * 1.15);
+  const masterH = Math.round(boxH * 1.15);
+  const masterSharp = await sharp(rawPhotoBuffer)
+    .resize(masterW, masterH, { fit: 'cover', position: 'centre' })
+    .sharpen({ sigma: 0.85 })
+    .modulate({ brightness: 1.04, saturation: 1.14 })
+    .png()
     .toBuffer();
+
+  const maxOffsetX = Math.max(0, masterW - boxW);
+  const maxOffsetY = Math.max(0, masterH - boxH);
+  const steps = [0.0, 0.20, 0.40, 0.60, 0.80, 1.0];
+
+  return await Promise.all(steps.map(async (t) => {
+    const prog = panDirection > 0 ? t : (1.0 - t);
+    const left = Math.min(maxOffsetX, Math.max(0, Math.round(maxOffsetX * prog)));
+    const top = Math.min(maxOffsetY, Math.max(0, Math.round(maxOffsetY * prog)));
+    const cropped = await sharp(masterSharp)
+      .extract({ left, top, width: boxW, height: boxH })
+      .png()
+      .toBuffer();
+    return await composeCardBuffer(cropped);
+  }));
 }
 
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
@@ -627,6 +701,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
 // Fast Vector HUD Overlay Renderer onto Pre-Built Base Scene Canvas (Studio 3.0 / 4.0 Edition)
 async function renderCaptionedFrame({
   baseCanvasBuffer,
+  baseCanvasBuffer2 = null,
   wordsChunk,
   activeWordIdx = 0,
   badgeText,
@@ -641,7 +716,8 @@ async function renderCaptionedFrame({
   isFlashCut = false,
   themeColor,
   progressRatio,
-  outputFramePath
+  outputFramePath,
+  outputFramePath2 = null
 }) {
   const pal = palette || getAtmospherePalette('cosmic');
   const highlightIdx = (activeWordIdx >= 0 && activeWordIdx < wordsChunk.length) ? activeWordIdx : 0;
@@ -679,10 +755,22 @@ async function renderCaptionedFrame({
     <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
-  await sharp(baseCanvasBuffer)
-    .composite([{ input: Buffer.from(hudSvg), left: 0, top: 0 }])
-    .jpeg({ quality: 91 })
-    .toFile(outputFramePath);
+  const hudBuf = Buffer.from(hudSvg);
+  const writes = [
+    sharp(baseCanvasBuffer)
+      .composite([{ input: hudBuf, left: 0, top: 0 }])
+      .jpeg({ quality: 90 })
+      .toFile(outputFramePath)
+  ];
+  if (baseCanvasBuffer2 && outputFramePath2) {
+    writes.push(
+      sharp(baseCanvasBuffer2)
+        .composite([{ input: hudBuf, left: 0, top: 0 }])
+        .jpeg({ quality: 90 })
+        .toFile(outputFramePath2)
+    );
+  }
+  await Promise.all(writes);
 }
 
 // Single-Pass Studio 3.0 / 4.0 Master Timeline Renderer
@@ -742,33 +830,24 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       }
     }
 
-    const [ttsResult, rawPhotoA, rawPhotoB] = await Promise.all([
+    const [ttsResult, mediaA, mediaB] = await Promise.all([
       synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, i),
       downloadAssignedTopicPhoto(dualQ.shotAQueue, i, 'A'),
       downloadAssignedTopicPhoto(dualQ.shotBQueue, i, 'B')
     ]);
 
+    const firstFrameA = mediaA.frames[0];
+    const firstFrameB = mediaB.frames[0];
+
     const [backdropA, backdropB] = await Promise.all([
-      sharp(rawPhotoA).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer(),
-      sharp(rawPhotoB).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer()
+      sharp(firstFrameA).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer(),
+      sharp(firstFrameB).resize(180, 320, { fit: 'cover' }).blur(5).modulate({ brightness: 0.36, saturation: 1.25 }).resize(WIDTH, HEIGHT).jpeg({ quality: 84 }).toBuffer()
     ]);
 
-    let canvases;
-    if (process.env.VERCEL) {
-      const [cA, cB] = await Promise.all([
-        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.03, visualStyle, palette.glowColor),
-        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.05, visualStyle, palette.glowColor)
-      ]);
-      canvases = [cA, cA, cB, cB];
-    } else {
-      const [canvasA1, canvasA2, canvasB1, canvasB2] = await Promise.all([
-        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.01, visualStyle, palette.glowColor),
-        buildBaseSceneCanvas(rawPhotoA, backdropA, 1.08, visualStyle, palette.glowColor),
-        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.02, visualStyle, palette.glowColor),
-        buildBaseSceneCanvas(rawPhotoB, backdropB, 1.10, visualStyle, palette.glowColor)
-      ]);
-      canvases = [canvasA1, canvasA2, canvasB1, canvasB2];
-    }
+    const [shotACanvases, shotBCanvases] = await Promise.all([
+      buildMotionSequenceForMedia(mediaA, backdropA, visualStyle, palette.glowColor, i % 2 === 0 ? 1 : -1),
+      buildMotionSequenceForMedia(mediaB, backdropB, visualStyle, palette.glowColor, i % 2 === 0 ? -1 : 1)
+    ]);
 
     return {
       index: i,
@@ -780,7 +859,11 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       audioWavPath,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries,
-      canvases
+      isGifA: Boolean(mediaA.isAnimatedGif),
+      isGifB: Boolean(mediaB.isAnimatedGif),
+      shotACanvases,
+      shotBCanvases,
+      canvases: [...shotACanvases, ...shotBCanvases]
     };
   }));
 
@@ -805,7 +888,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando HUD de Tensão + Re-Hooks (20s/42s) + Pílula Neon...');
+  onProgress(68, 'Renderizando GIFs Animados + Movimento de Câmera + Legendas...');
 
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
@@ -831,16 +914,30 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
 
       const isVisualLoopBridge = isFinalLoopScene && (c >= Math.max(1, timedChunks.length - 2));
 
-      // Select among the 4 dynamic camera cuts per scene (0-25%: A1, 25-50%: A2, 50-75%: B1, 75-100%: B2)
-      let selectedCanvas = asset.canvases[0];
+      let selectedCanvas = asset.shotACanvases[0];
+      let selectedCanvas2 = null;
       if (isVisualLoopBridge) {
-        selectedCanvas = sceneAssets[0].canvases[0];
-      } else if (sceneProgress >= 0.75) {
-        selectedCanvas = asset.canvases[3];
-      } else if (sceneProgress >= 0.50) {
-        selectedCanvas = asset.canvases[2];
-      } else if (sceneProgress >= 0.25) {
-        selectedCanvas = asset.canvases[1];
+        selectedCanvas = sceneAssets[0].shotACanvases[0];
+      } else if (sceneProgress < 0.50) {
+        const lenA = asset.shotACanvases.length;
+        const idxA = asset.isGifA
+          ? ((c * 2) % lenA)
+          : Math.min(lenA - 1, Math.floor((sceneProgress / 0.50) * lenA));
+        selectedCanvas = asset.shotACanvases[idxA];
+        const idxA2 = asset.isGifA ? ((idxA + 1) % lenA) : Math.min(lenA - 1, idxA + 1);
+        if (thisChunkDur >= 0.24 && idxA2 !== idxA) {
+          selectedCanvas2 = asset.shotACanvases[idxA2];
+        }
+      } else {
+        const lenB = asset.shotBCanvases.length;
+        const idxB = asset.isGifB
+          ? ((c * 2) % lenB)
+          : Math.min(lenB - 1, Math.floor(((sceneProgress - 0.50) / 0.50) * lenB));
+        selectedCanvas = asset.shotBCanvases[idxB];
+        const idxB2 = asset.isGifB ? ((idxB + 1) % lenB) : Math.min(lenB - 1, idxB + 1);
+        if (thisChunkDur >= 0.24 && idxB2 !== idxB) {
+          selectedCanvas2 = asset.shotBCanvases[idxB2];
+        }
       }
 
       // Trigger subtle 60ms cinema flash on scene start or 50% mid-scene photo cut
@@ -851,27 +948,21 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         isFlashCut = true;
       }
 
-      // ITEM #4: Anti-Boredom Visual Re-Hook Alert on Scene 3 (~20s) and Scene 5 (~42s) first 4 word steps
-      let rehookAlertText = '';
-      if (i === 2 && c <= 3) {
-        rehookAlertText = 'REVELACAO CRITICA • PRESTE ATENCAO';
-      } else if (i === 4 && c <= 3) {
-        rehookAlertText = 'O PONTO MAIS EXTREMO DESTE CASO';
-      }
-
       const frameLabel = isVisualLoopBridge ? sceneAssets[0].sceneLabel : asset.sceneLabel;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
       const isCoverFrame = (i === 0 && c === 0);
+      const framePath2 = selectedCanvas2 ? path.join(tmpDir, `s${i}_c${c}_b.jpg`) : null;
 
       frameJobs.push({
         baseCanvasBuffer: selectedCanvas,
+        baseCanvasBuffer2: selectedCanvas2,
         wordsChunk: timedChunks[c].words,
         activeWordIdx: timedChunks[c].activeWordIdx,
         badgeText,
         sceneLabel: frameLabel,
         dataCalloutText: asset.dataCallout,
-        rehookAlertText,
-        coverTitleText: isCoverFrame ? (scriptData.title || '') : '',
+        rehookAlertText: '',
+        coverTitleText: '',
         speakerBadgeText: asset.speakerBadgeText,
         tensionInfo: isVisualLoopBridge ? getTensionPhaseInfo(0, sceneAssets.length) : tensionInfo,
         isCommentBaitScene: asset.isCommentBaitScene,
@@ -879,13 +970,23 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         isFlashCut,
         themeColor,
         progressRatio,
-        outputFramePath: framePath
+        outputFramePath: framePath,
+        outputFramePath2: framePath2
       });
 
-      const safeFramePath = framePath.replace(/\\/g, '/');
-      masterConcatContent += `file '${safeFramePath}'\n`;
-      masterConcatContent += `duration ${thisChunkDur.toFixed(4)}\n`;
-      lastRenderedFramePath = safeFramePath;
+      if (selectedCanvas2 && framePath2) {
+        const halfDur = (thisChunkDur * 0.5).toFixed(4);
+        const safe1 = framePath.replace(/\\/g, '/');
+        const safe2 = framePath2.replace(/\\/g, '/');
+        masterConcatContent += `file '${safe1}'\nduration ${halfDur}\n`;
+        masterConcatContent += `file '${safe2}'\nduration ${halfDur}\n`;
+        lastRenderedFramePath = safe2;
+      } else {
+        const safeFramePath = framePath.replace(/\\/g, '/');
+        masterConcatContent += `file '${safeFramePath}'\n`;
+        masterConcatContent += `duration ${thisChunkDur.toFixed(4)}\n`;
+        lastRenderedFramePath = safeFramePath;
+      }
     }
 
     elapsedDuration += asset.duration;
@@ -914,7 +1015,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalMp4Path = path.join(outDir, finalFilename);
 
   // ITEM #3: Broadcast Shure SM7B Studio Voice Mastering (Highpass + Dynamic Compressor + Warm Presence) in FFmpeg
-  const fpsRate = process.env.VERCEL ? '8' : '25';
+  const fpsRate = process.env.VERCEL ? '12' : '25';
   execFileSync(ffmpegPath, [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
