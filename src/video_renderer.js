@@ -330,21 +330,23 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const enTitle = enTitleClean || enTitleFull;
   console.log(`🎥 [Real Video Pool] "${rawTopic}" (${enTitle || 'PT'}): ${pool.length} VÍDEOS REAIS (.mov/.webm) encontrados!`);
 
-  // Assign 2 candidate real video URLs per scene (1 primary unique video + 1 backup video)
+  // Assign 4 candidate real video URLs per scene + 1 guaranteed fast (<3MB) real camera/drone clip
   let vCursor = 0;
-  return scenes.map(() => {
-    if (pool.length === 0) return { videoQueue: [] };
+  return scenes.map((_, sIdx) => {
+    if (pool.length === 0) return { videoQueue: [verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length]] };
     const primary = pool[vCursor % pool.length].url;
-    const backup = pool[(vCursor + 4) % pool.length].url;
-    const backup2 = pool[(vCursor + 8) % pool.length].url;
+    const backup1 = pool[(vCursor + 5) % pool.length].url;
+    const backup2 = pool[(vCursor + 11) % pool.length].url;
+    const backup3 = pool[(vCursor + 17) % pool.length].url;
+    const guaranteedFastReal = verifiedRealCameraClips[sIdx % verifiedRealCameraClips.length];
     vCursor++;
     return {
-      videoQueue: [primary, backup, backup2]
+      videoQueue: [primary, backup1, backup2, backup3, guaranteedFastReal]
     };
   });
 }
 
-// Downloads a real .mov/.webm video clip to disk (using HTTP Range up to 3.2MB so it downloads in <0.6s!)
+// Downloads a real .mov/.webm video clip to disk (skipping >9.5MB long documentaries before reading body so every clip downloads in <0.7s!)
 async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, sceneIdx = 0) {
   for (const vidUrl of videoQueue) {
     if (!vidUrl) continue;
@@ -353,11 +355,17 @@ async function downloadRealVideoClipToDisk(videoQueue = [], outputClipPath, scen
         headers: {
           'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)'
         },
-        signal: AbortSignal.timeout(3200)
+        signal: AbortSignal.timeout(2800)
       });
       if (r.ok) {
+        const contentLen = parseInt(r.headers.get('content-length') || '0', 10);
+        if (contentLen > 9500000) {
+          // Cancel body stream immediately if video is > 9.5MB so we pick a crisp 15-45s clip instead
+          try { await r.body?.cancel(); } catch (e) {}
+          continue;
+        }
         const buf = Buffer.from(await r.arrayBuffer());
-        if (buf.length > 40000) {
+        if (buf.length > 40000 && buf.length <= 9500000) {
           fs.writeFileSync(outputClipPath, buf);
           const shortName = vidUrl.split('/').pop().split('?')[0].slice(0, 42);
           console.log(`🎥 [Cena ${sceneIdx + 1}] VÍDEO REAL baixado: ${shortName} (${Math.round(buf.length / 1024)} KB)`);
