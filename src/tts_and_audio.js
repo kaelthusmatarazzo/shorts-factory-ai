@@ -4,40 +4,87 @@ const { execFileSync } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
-// Synthesize speech in PT-BR and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
+// Clean text for natural human conversational speech (eliminates robotic unit reading, parentheses & abbreviations)
+function prepareTextForHumanSpeech(rawText) {
+  if (!rawText) return '';
+  let s = String(rawText);
+
+  // 1. Remove parenthesized technical/botanical/Latin names that sound robotic when read aloud
+  s = s.replace(/\s*\([A-Z][a-z]+ [a-z]+[^)]*\)/g, '');
+  s = s.replace(/\s*\([a-z]+ [a-z]+[^)]*\)/g, '');
+  s = s.replace(/\[\d+\]/g, '');
+  s = s.replace(/\[nota \d+\]/gi, '');
+
+  // 2. Expand common scientific, metric and geographic units to natural spoken Portuguese words
+  s = s.replace(/(\d+)\s*km²\b/gi, '$1 quilômetros quadrados');
+  s = s.replace(/(\d+)\s*km\/h\b/gi, '$1 quilômetros por hora');
+  s = s.replace(/(\d+)\s*km\b/gi, '$1 quilômetros');
+  s = s.replace(/(\d+)\s*m²\b/gi, '$1 metros quadrados');
+  s = s.replace(/(\d+)\s*m³\b/gi, '$1 metros cúbicos');
+  s = s.replace(/(\d+)\s*cm\b/gi, '$1 centímetros');
+  s = s.replace(/(\d+)\s*mm\b/gi, '$1 milímetros');
+  s = s.replace(/(\d+)\s*kg\b/gi, '$1 quilos');
+  s = s.replace(/(\d+)\s*t\b/gi, '$1 toneladas');
+  s = s.replace(/(\d+)\s*(?:°|º)?C\b/g, '$1 graus Celsius');
+  s = s.replace(/(\d+)\s*%/g, '$1 por cento');
+  s = s.replace(/(\d+)\s*x\b/gi, '$1 vezes');
+  s = s.replace(/(\d+)\s*h\b/gi, '$1 horas');
+  s = s.replace(/(\d+)\s*min\b/gi, '$1 minutos');
+  s = s.replace(/(\d+)\s*seg\b/gi, '$1 segundos');
+
+  // 3. Make numbers sound natural for Brazilian Portuguese
+  s = s.replace(/\b(\d+)\.000\.000\b/g, '$1 milhões');
+  s = s.replace(/\b(\d+)\.000\b/g, '$1 mil');
+  s = s.replace(/\b1\.000\b/g, 'mil');
+
+  // 4. Clean up robotic slashes
+  s = s.replace(/(\w+)\/(\w+)/g, '$1 por $2');
+
+  // 5. Enhance breathing pauses: ensure commas exist after natural conversational interjections
+  s = s.replace(/\b(Olha só|Presta atenção|Para você ter uma ideia|E o mais louco|E o mais bizarro|E sabe o que é mais chocante|E tem mais|Inacreditável|Caramba|Nossa|Sério|Pois é|Cara)\b(?!\s*[,:!?])/gi, '$1,');
+
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+// Synthesize speech in PT-BR with natural human prosody and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
 async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-ThalitaMultilingualNeural', sceneIndex = 0) {
   const rawMp3Path = outputWavPath.replace(/\.wav$/, '_raw.mp3');
   let wordBoundaries = [];
   let generated = false;
   let usedEmergencyGoogle = false;
 
-  // Scene-Aware Documentary Prosody for Natural Podcast Conversation
+  // Natural Human Prosody: 0% rate & 0Hz pitch preserves 100% of native vocal warmth, natural breathing and emotion!
   const baseProsodyByVoice = {
     'pt-BR-ThalitaMultilingualNeural': [
-      { rate: '+10%', pitch: '+1Hz' }, // Scene 1: Scroll-stopping Hook
-      { rate: '+7%', pitch: '-1Hz' },  // Scene 2: Engaging Setup
-      { rate: '+7%', pitch: '-1Hz' },  // Scene 3: Deep Mechanism
-      { rate: '+6%', pitch: '-1Hz' },  // Scene 4: Dramatic Reveal / Extreme Numbers
-      { rate: '+7%', pitch: '-1Hz' },  // Scene 5: Historical Proof
-      { rate: '+8%', pitch: '+0Hz' },  // Scene 6: Scientific Payoff
-      { rate: '+9%', pitch: '+1Hz' }   // Scene 7: Cliffhanger Loop Bridge -> 0:00
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+1%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+1%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' }
     ],
     'pt-BR-AntonioNeural': [
-      { rate: '+8%', pitch: '-1Hz' },  // Scene 1 / 2: Natural curiosity / reaction
-      { rate: '+9%', pitch: '+0Hz' },  // Scene 3: Expressive counter-point
-      { rate: '+7%', pitch: '-1Hz' },  // Scene 4: Extreme numbers / astonishment
-      { rate: '+8%', pitch: '+0Hz' },  // Scene 5: Concrete evidence
-      { rate: '+8%', pitch: '+0Hz' },  // Scene 6: Call to action / opinion bait
-      { rate: '+9%', pitch: '+1Hz' }   // Scene 7: Bridge handoff
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+1%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+1%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' },
+      { rate: '+0%', pitch: '+0Hz' }
     ],
-    'pt-BR-FabioNeural': [{ rate: '+8%', pitch: '-1Hz' }],
-    'pt-BR-FranciscaNeural': [{ rate: '+8%', pitch: '-1Hz' }],
-    'en-US-AvaMultilingualNeural': [{ rate: '+7%', pitch: '+0Hz' }],
-    'en-US-EmmaMultilingualNeural': [{ rate: '+8%', pitch: '+0Hz' }]
+    'pt-BR-FabioNeural': [{ rate: '+0%', pitch: '+0Hz' }],
+    'pt-BR-FranciscaNeural': [{ rate: '+0%', pitch: '+0Hz' }],
+    'en-US-AvaMultilingualNeural': [{ rate: '+0%', pitch: '+0Hz' }],
+    'en-US-EmmaMultilingualNeural': [{ rate: '+0%', pitch: '+0Hz' }]
   };
 
   const isMale = (voiceName.includes('Antonio') || voiceName.includes('Fabio'));
-  const fallbackNeuralVoice = isMale ? 'pt-BR-FabioNeural' : 'pt-BR-FranciscaNeural';
+  const fallbackNeuralVoice = isMale
+    ? (voiceName.includes('Fabio') ? 'pt-BR-AntonioNeural' : 'pt-BR-FabioNeural')
+    : (voiceName.includes('Francisca') ? 'pt-BR-ThalitaMultilingualNeural' : 'pt-BR-FranciscaNeural');
+
+  const spokenText = prepareTextForHumanSpeech(text);
 
   async function tryEdgeSynthesis(targetVoice) {
     const tts = new MsEdgeTTS();
@@ -45,12 +92,12 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
       tts.setMetadata(targetVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
         wordBoundaryEnabled: true
       }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 7000))
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 8000))
     ]);
 
     const voiceCurve = baseProsodyByVoice[targetVoice] || (isMale ? baseProsodyByVoice['pt-BR-AntonioNeural'] : baseProsodyByVoice['pt-BR-ThalitaMultilingualNeural']);
-    const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+7%', pitch: '-1Hz' };
-    const { audioStream, metadataStream } = tts.toStream(text, prosodyOptions);
+    const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+0%', pitch: '+0Hz' };
+    const { audioStream, metadataStream } = tts.toStream(spokenText, prosodyOptions);
     const localWb = [];
 
     if (metadataStream) {
@@ -80,7 +127,7 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
         if (settled) return;
         settled = true;
         reject(new Error('Edge TTS stream timeout'));
-      }, 9500);
+      }, 12000);
 
       audioStream.on('data', chunk => {
         if (!settled) chunks.push(chunk);
@@ -157,10 +204,10 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
   const execFileAsync = promisify(execFile);
 
   if (generated) {
-    // If emergency fallback was used for a male voice, apply pitch shift so it sounds masculine
+    // Clean Studio Broadcast Voice Mastering (Warm chest presence, smooth clarity, zero metallic sibilance)
     const audioFilters = usedEmergencyGoogle && isMale
-      ? 'asetrate=44100*0.88,atempo=1.14,equalizer=f=185:t=q:w=1.2:g=2.2'
-      : 'equalizer=f=185:t=q:w=1.2:g=2.2,equalizer=f=3400:t=q:w=1.8:g=-2.2,equalizer=f=10500:t=q:w=1.0:g=2.4';
+      ? 'asetrate=44100*0.88,atempo=1.14,highpass=f=70,volume=1.05'
+      : 'highpass=f=70,equalizer=f=240:t=q:w=1.0:g=0.6,equalizer=f=3200:t=q:w=1.0:g=0.8,equalizer=f=8500:t=q:w=1.2:g=-0.8,lowpass=f=15500,volume=1.04';
 
     await execFileAsync(ffmpegPath, [
       '-y', '-i', rawMp3Path,
@@ -313,24 +360,24 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
     const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * preset.lfoHz * t);
     let pad = 0;
     for (let k = 0; k < freqs.length; k++) {
-      pad += Math.sin(2 * Math.PI * freqs[k] * t + Math.sin(t * (k + 1))) * 0.16;
+      pad += Math.sin(2 * Math.PI * freqs[k] * t) * 0.10;
     }
 
     const beatPos = (t % (beatDur * 2)) / (beatDur * 2);
-    const subEnv = Math.exp(-beatPos * 4.5);
-    const sub = Math.tanh(Math.sin(2 * Math.PI * subFreq * t) * 2.0) * subEnv * preset.subGain;
+    const subEnv = Math.exp(-beatPos * 4.0);
+    const sub = Math.sin(2 * Math.PI * subFreq * t) * subEnv * (preset.subGain * 0.65);
 
     const arpIdx = Math.floor(t / (beatDur / 2)) % freqs.length;
     const arpPos = (t % (beatDur / 2)) / (beatDur / 2);
-    const arpEnv = Math.exp(-arpPos * 7.0);
-    const arp = Math.sin(2 * Math.PI * (freqs[arpIdx] * preset.arpMult) * t) * arpEnv * 0.11;
+    const arpEnv = Math.exp(-arpPos * 8.0);
+    const arp = Math.sin(2 * Math.PI * freqs[arpIdx] * t) * arpEnv * 0.025;
 
     let masterEnv = 1.0;
     if (t < 0.25) masterEnv = t / 0.25;
     if (t > durationSec - 0.5) masterEnv = Math.max(0, (durationSec - t) / 0.5);
 
-    left[i] = (pad * (0.7 + 0.3 * lfo) + sub + arp * 0.8) * masterEnv;
-    right[i] = (pad * (1.0 - 0.3 * lfo) + sub + arp * 1.2) * masterEnv;
+    left[i] = (pad * (0.7 + 0.3 * lfo) + sub + arp) * masterEnv;
+    right[i] = (pad * (1.0 - 0.3 * lfo) + sub + arp) * masterEnv;
   }
 
   // 0:00 Scroll-Stopping Hook Sub-Bass Impact + Shutter
@@ -480,5 +527,6 @@ module.exports = {
   synthesizeSpeech,
   synthesizeSpeechWithTimings,
   getAudioDuration,
-  generateBackgroundMusicWav
+  generateBackgroundMusicWav,
+  prepareTextForHumanSpeech
 };
