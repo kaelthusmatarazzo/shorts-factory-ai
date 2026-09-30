@@ -386,8 +386,8 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 }
 
 // UPGRADE #3: Downloads a real web photo, validates via Computer Vision Quality Gate, and creates an 800x1422 Master Overscan Buffer for smooth monotonic Ken Burns zoom!
-const OVERSCAN_W = 960;
-const OVERSCAN_H = 1706;
+const OVERSCAN_W = 720;
+const OVERSCAN_H = 1280;
 const VIDEO_FPS = 20;
 const SUB_STRIP_Y = 790;
 const SUB_STRIP_H = HEIGHT - SUB_STRIP_Y; // 490px bottom overlay strip
@@ -889,22 +889,27 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // Build True 24-FPS Super-Sampled Zoompan Filter Complex + Transparent Subtitle Strip Overlay
+  // Build True Sub-Pixel Floating-Point Perspective Zoom Filter Complex (1/256px precision — zero integer truncation tremor!)
   const ffmpegArgs = ['-y'];
   const filterParts = [];
   const concatVideoInputs = [];
 
   for (let k = 0; k < zoompanClips.length; k++) {
     const clip = zoompanClips[k];
-    ffmpegArgs.push('-i', clip.photoPath);
+    const clipDurSec = (clip.frames / VIDEO_FPS).toFixed(4);
+    ffmpegArgs.push('-loop', '1', '-framerate', String(VIDEO_FPS), '-t', clipDurSec, '-i', clip.photoPath);
     const denom = Math.max(1, clip.frames - 1);
-    // Smooth 24-FPS Center-Locked Zoom-In (1.000 -> 1.135) on Photo A, and Zoom-Out (1.135 -> 1.000) on Photo B
-    // Because Photo B ends at 1.000 and Scene 0 Photo A starts at 1.000, the loop transition at 0:00 has 0% zoom jump!
-    const zExpr = clip.zoomDir === 'in'
-      ? `1.0+0.135*(on/${denom})`
-      : `1.135-0.135*(on/${denom})`;
+    // Floating-point sub-pixel corner inset (dx: 0 -> 39.6px, dy: 0 -> 70.4px = exact 9:16 11% zoom)
+    // Unlike zoompan (which truncates x, y, w, h to int and trembles by ±0.5px), perspective evaluates double-precision
+    // floating-point coordinates and interpolates at 1/256th-pixel precision with optical center (360.0, 640.0) 100% invariant!
+    const dxExpr = clip.zoomDir === 'in'
+      ? `39.6*(on/${denom})`
+      : `39.6*(1-on/${denom})`;
+    const dyExpr = clip.zoomDir === 'in'
+      ? `70.4*(on/${denom})`
+      : `70.4*(1-on/${denom})`;
     filterParts.push(
-      `[${k}:v]zoompan=z='${zExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${clip.frames}:s=${WIDTH}x${HEIGHT}:fps=${VIDEO_FPS},fade=t=in:st=0:d=0.08:color=white[zp${k}]`
+      `[${k}:v]trim=end_frame=${clip.frames},perspective=x0='${dxExpr}':y0='${dyExpr}':x1='W-(${dxExpr})':y1='${dyExpr}':x2='${dxExpr}':y2='H-(${dyExpr})':x3='W-(${dxExpr})':y3='H-(${dyExpr})':interpolation=linear:sense=source:eval=frame,fade=t=in:st=0:d=0.08:color=white[zp${k}]`
     );
     concatVideoInputs.push(`[zp${k}]`);
   }
