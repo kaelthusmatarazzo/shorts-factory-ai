@@ -5,17 +5,23 @@ const CONFIG_FILE = path.join(__dirname, '..', 'data', 'telegram_config.json');
 const HISTORY_FILE = path.join(__dirname, '..', 'data', 'history.json');
 
 function loadTelegramConfig() {
+  let cfg = null;
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     }
-  } catch (e) {
-    console.error('Error reading telegram_config.json:', e.message);
-  }
+  } catch (e) {}
+
+  const botToken = (cfg && cfg.botToken) || process.env.TELEGRAM_BOT_TOKEN || '8780088602:AAHyWqGDEsNNoIWR4vPLSpgeQRJfYbDusdk';
+  const chatId = (cfg && cfg.chatId) || process.env.TELEGRAM_CHAT_ID || '-1004334660783';
+  const enabled = (cfg && cfg.enabled !== undefined) ? cfg.enabled : true;
+
   return {
-    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    chatId: process.env.TELEGRAM_CHAT_ID || '',
-    enabled: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
+    botToken,
+    chatId,
+    enabled: Boolean(enabled && botToken && chatId),
+    botUsername: (cfg && cfg.botUsername) || 'Shofacbot',
+    chatTitle: (cfg && cfg.chatTitle) || 'Shorts Factory History'
   };
 }
 
@@ -35,12 +41,27 @@ async function sendVideoToTelegram(videoMeta, localFilePath = null) {
     return null;
   }
 
-  let targetPath = localFilePath;
-  if (!targetPath && videoMeta.url && !videoMeta.url.startsWith('http') && !videoMeta.url.startsWith('data:')) {
-    targetPath = path.join(__dirname, '..', 'public', videoMeta.url.replace(/^\/+/, ''));
+  let fileBytes = null;
+  let fileName = (videoMeta.filename || 'short_video.mp4');
+
+  if (localFilePath && fs.existsSync(localFilePath)) {
+    fileBytes = fs.readFileSync(localFilePath);
+    fileName = path.basename(localFilePath);
+  } else if (videoMeta.localMp4Path && fs.existsSync(videoMeta.localMp4Path)) {
+    fileBytes = fs.readFileSync(videoMeta.localMp4Path);
+    fileName = path.basename(videoMeta.localMp4Path);
+  } else {
+    const pubPath = path.join(__dirname, '..', 'public', (videoMeta.filename ? `videos/${videoMeta.filename}` : (videoMeta.url || '').replace(/^\/+/, '')));
+    if (fs.existsSync(pubPath)) {
+      fileBytes = fs.readFileSync(pubPath);
+      fileName = path.basename(pubPath);
+    } else if (videoMeta.url && videoMeta.url.startsWith('data:video/mp4;base64,')) {
+      fileBytes = Buffer.from(videoMeta.url.replace(/^data:video\/mp4;base64,/, ''), 'base64');
+    }
   }
-  if (!targetPath || !fs.existsSync(targetPath)) {
-    console.error('[Telegram] Arquivo de vídeo local não encontrado para envio:', targetPath);
+
+  if (!fileBytes || fileBytes.length === 0) {
+    console.error('[Telegram] Arquivo de vídeo não encontrado para envio:', fileName);
     return null;
   }
 
@@ -63,8 +84,6 @@ async function sendVideoToTelegram(videoMeta, localFilePath = null) {
     caption = caption.slice(0, 1016) + '...';
   }
 
-  const fileBytes = fs.readFileSync(targetPath);
-  const fileName = path.basename(targetPath);
   const blob = new Blob([fileBytes], { type: 'video/mp4' });
 
   const form = new FormData();
