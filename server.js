@@ -7,7 +7,8 @@ const { generateUniqueScript, loadHistory, saveToHistory } = require('./src/gene
 const { buildShortVideo } = require('./src/video_renderer');
 
 const app = express();
-const PORT = 3999;
+const PORT = process.env.PORT || 3999;
+const HOST = (process.env.RENDER || process.env.PORT) ? '0.0.0.0' : '127.0.0.1';
 
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -57,7 +58,43 @@ app.post('/api/generate', async (req, res) => {
         ? scriptOverride
         : await genScript(niche, customTopic, durationMode, safeExclude);
       const videoResult = await buildVid(scriptData, { voice, visualStyle });
+
+      // Automatic Cloudflare R2 Upload & Sync
+      try {
+        const { uploadVideoToR2, syncDatabaseToR2 } = require('./src/r2_storage');
+        const videoFilePath = path.join(__dirname, 'public', videoResult.url.replace(/^\/+/, ''));
+        if (fs.existsSync(videoFilePath)) {
+          const r2Url = await uploadVideoToR2(videoFilePath, videoResult.filename);
+          if (r2Url) {
+            videoResult.r2Url = r2Url;
+            videoResult.url = r2Url;
+          }
+        }
+      } catch (e) {
+        console.error('[R2 Vercel Upload Error]', e.message);
+      }
+
+      // Automatic Telegram Upload & Sync
+      try {
+        const { sendVideoToTelegram, syncHistoryDatabaseToTelegram } = require('./src/telegram_storage');
+        const videoFilePath = path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : videoResult.url.replace(/^\/+/, '')));
+        if (fs.existsSync(videoFilePath)) {
+          const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
+          if (tgResult && tgResult.messageId) {
+            videoResult.telegram = tgResult;
+          }
+        }
+        await syncHistoryDatabaseToTelegram();
+      } catch (tgErr) {
+        console.error('[Telegram Vercel Error]', tgErr.message);
+      }
+
       saveHist(videoResult, safeExclude);
+      try {
+        const { syncDatabaseToR2 } = require('./src/r2_storage');
+        await syncDatabaseToR2();
+      } catch (e) {}
+
       return res.json({ jobId, directResult: videoResult });
     } catch (err) {
       return res.status(500).json({ error: err.message || 'Erro no Vercel Serverless' });
@@ -93,7 +130,57 @@ app.post('/api/generate', async (req, res) => {
         });
       });
 
+      // Automatic Cloudflare R2 Cloud Upload
+      try {
+        const { uploadVideoToR2, syncDatabaseToR2 } = require('./src/r2_storage');
+        const videoFilePath = path.join(__dirname, 'public', videoResult.url.replace(/^\/+/, ''));
+        if (fs.existsSync(videoFilePath)) {
+          jobs.set(jobId, {
+            id: jobId,
+            status: 'running',
+            progress: 92,
+            message: 'Fazendo upload seguro para Cloudflare R2 (10 GB Nuvem)...'
+          });
+          const r2Url = await uploadVideoToR2(videoFilePath, videoResult.filename);
+          if (r2Url) {
+            videoResult.r2Url = r2Url;
+            videoResult.url = r2Url;
+          }
+        }
+      } catch (r2Err) {
+        console.error('[R2 Upload Error]', r2Err.message);
+      }
+
+      // Automatic Telegram Upload (Unlimited Cloud & Direct Phone Access)
+      try {
+        const { sendVideoToTelegram, syncHistoryDatabaseToTelegram } = require('./src/telegram_storage');
+        const videoFilePath = path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : videoResult.url.replace(/^\/+/, '')));
+        if (fs.existsSync(videoFilePath)) {
+          jobs.set(jobId, {
+            id: jobId,
+            status: 'running',
+            progress: 96,
+            message: 'Enviando vídeo para o seu Telegram (@Shofacbot)...'
+          });
+          const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
+          if (tgResult && tgResult.messageId) {
+            videoResult.telegram = tgResult;
+          }
+        }
+      } catch (tgErr) {
+        console.error('[Telegram Upload Error]', tgErr.message);
+      }
+
       saveHist(videoResult, safeExclude);
+      try {
+        const { syncDatabaseToR2 } = require('./src/r2_storage');
+        await syncDatabaseToR2();
+      } catch (e) {}
+
+      try {
+        const { syncHistoryDatabaseToTelegram } = require('./src/telegram_storage');
+        await syncHistoryDatabaseToTelegram();
+      } catch (e) {}
 
       jobs.set(jobId, {
         id: jobId,
@@ -121,26 +208,148 @@ app.get('/api/status/:jobId', (req, res) => {
   res.json(job);
 });
 
+// Cloudflare R2 Storage API Endpoints
+app.get('/api/r2/config', (req, res) => {
+  try {
+    const { loadR2Config } = require('./src/r2_storage');
+    const cfg = loadR2Config();
+    const isConfigured = Boolean(cfg.accountId && cfg.accessKeyId && cfg.secretAccessKey);
+    res.json({
+      configured: isConfigured,
+      accountId: cfg.accountId || '',
+      bucketName: cfg.bucketName || 'shorts-videos',
+      publicUrl: cfg.publicUrl || ''
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/r2/config', (req, res) => {
+  try {
+    const { saveR2Config, getR2Client } = require('./src/r2_storage');
+    const { accountId, accessKeyId, secretAccessKey, bucketName, publicUrl } = req.body || {};
+    if (!accountId || !accessKeyId || !secretAccessKey) {
+      return res.status(400).json({ error: 'ACCOUNT_ID, ACCESS_KEY_ID e SECRET_ACCESS_KEY são obrigatórios.' });
+    }
+    const cleanConfig = {
+      accountId: String(accountId).trim(),
+      accessKeyId: String(accessKeyId).trim(),
+      secretAccessKey: String(secretAccessKey).trim(),
+      bucketName: String(bucketName || 'shorts-videos').trim(),
+      publicUrl: String(publicUrl || '').trim().replace(/\/+$/, '')
+    };
+    saveR2Config(cleanConfig);
+    const client = getR2Client(cleanConfig);
+    if (!client) throw new Error('Falha ao inicializar cliente R2 com estas credenciais.');
+
+    res.json({ ok: true, message: 'Credenciais do Cloudflare R2 salvas com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/r2/sync-all', async (req, res) => {
+  try {
+    const { syncAllLocalVideosToR2 } = require('./src/r2_storage');
+    const result = await syncAllLocalVideosToR2();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Telegram Storage & Anti-Repetition API Endpoints
+app.get('/api/telegram/config', (req, res) => {
+  try {
+    const { loadTelegramConfig } = require('./src/telegram_storage');
+    const cfg = loadTelegramConfig();
+    res.json({
+      configured: Boolean(cfg.botToken && cfg.chatId),
+      enabled: Boolean(cfg.enabled),
+      botUsername: cfg.botUsername || 'Shofacbot',
+      chatTitle: cfg.chatTitle || 'Shorts Factory History',
+      chatId: cfg.chatId
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/telegram/config', (req, res) => {
+  try {
+    const { saveTelegramConfig, loadTelegramConfig } = require('./src/telegram_storage');
+    const { botToken, chatId, enabled } = req.body || {};
+    const current = loadTelegramConfig();
+    const updated = {
+      ...current,
+      botToken: botToken !== undefined ? String(botToken).trim() : current.botToken,
+      chatId: chatId !== undefined ? String(chatId).trim() : current.chatId,
+      enabled: enabled !== undefined ? Boolean(enabled) : true
+    };
+    saveTelegramConfig(updated);
+    res.json({ ok: true, config: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/telegram/sync-all', async (req, res) => {
+  try {
+    const { syncAllLocalVideosToTelegram } = require('./src/telegram_storage');
+    const result = await syncAllLocalVideosToTelegram();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/telegram/restore-db', async (req, res) => {
+  try {
+    const { fetchHistoryDatabaseFromTelegram } = require('./src/telegram_storage');
+    const remoteDb = await fetchHistoryDatabaseFromTelegram();
+    if (!remoteDb) {
+      return res.status(404).json({ error: 'Nenhuma base encontrada fixada no Telegram' });
+    }
+    const historyPath = path.join(__dirname, 'data', 'history.json');
+    fs.writeFileSync(historyPath, JSON.stringify(remoteDb, null, 2), 'utf8');
+    delete require.cache[require.resolve('./src/generator')];
+    res.json({ ok: true, totalVideos: remoteDb.videos?.length || 0, totalTopics: remoteDb.usedTopics?.length || 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/history', (req, res) => {
   delete require.cache[require.resolve('./src/generator')];
   const { loadHistory: loadHist } = require('./src/generator');
+  const { loadTelegramConfig } = require('./src/telegram_storage');
   const history = loadHist();
+  const tgCfg = loadTelegramConfig();
   res.json({
     tunnelUrl: currentTunnelUrl,
     usedTopics: history.usedTopics || [],
     usedTitles: history.usedTitles || [],
-    videos: history.videos || []
+    videos: history.videos || [],
+    telegram: {
+      enabled: Boolean(tgCfg.enabled),
+      configured: Boolean(tgCfg.botToken && tgCfg.chatId),
+      botUsername: tgCfg.botUsername || 'Shofacbot',
+      chatTitle: tgCfg.chatTitle || 'Shorts Factory History'
+    }
   });
 });
 
 // Start Express Server & Cloudflare Quick Tunnel for Remote Mobile Access (when not running on Vercel Serverless)
 if (!process.env.VERCEL) {
-  app.listen(PORT, '127.0.0.1', () => {
+  app.listen(PORT, HOST, () => {
     console.log(`\n========================================`);
-    console.log(`🚀 Shorts Factory Server running on http://127.0.0.1:${PORT}`);
+    console.log(`🚀 Shorts Factory Server running on http://${HOST}:${PORT}`);
     console.log(`========================================\n`);
 
-    startCloudflareTunnel();
+    if (!process.env.RENDER && !process.env.PORT) {
+      startCloudflareTunnel();
+    }
   });
 }
 
