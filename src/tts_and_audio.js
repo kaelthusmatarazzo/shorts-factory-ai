@@ -35,7 +35,7 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
       tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
         wordBoundaryEnabled: true
       }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 3500))
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 6000))
     ]);
 
     const { audioStream, metadataStream } = tts.toStream(text, prosodyOptions);
@@ -72,7 +72,7 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
         if (settled) return;
         settled = true;
         reject(new Error('Edge TTS timeout'));
-      }, 1900);
+      }, 8500);
       audioStream.on('data', chunk => {
         if (!settled) chunks.push(chunk);
       });
