@@ -392,7 +392,7 @@ const VIDEO_FPS = 20;
 const SUB_STRIP_Y = 790;
 const SUB_STRIP_H = HEIGHT - SUB_STRIP_Y; // 490px bottom overlay strip
 
-async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
+async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isPunchIn = false) {
   const pal = getAtmospherePalette(colorTheme);
   let bestImgBuf = null;
 
@@ -428,12 +428,28 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
 
   if (bestImgBuf) {
     try {
-      return await sharp(bestImgBuf)
-        .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
-        .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
-        .modulate({ brightness: 0.98, saturation: 1.18 })
-        .jpeg({ quality: 88 })
-        .toBuffer();
+      if (isPunchIn) {
+        // Dynamic Shot B: 116% Macro Punch-in Cut on center action (Vox / Documentary signature style)
+        const punchW = Math.round(OVERSCAN_W * 1.16);
+        const punchH = Math.round(OVERSCAN_H * 1.16);
+        const left = Math.round((punchW - OVERSCAN_W) / 2);
+        const top = Math.round((punchH - OVERSCAN_H) / 2);
+        return await sharp(bestImgBuf)
+          .resize(punchW, punchH, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
+          .extract({ left, top, width: OVERSCAN_W, height: OVERSCAN_H })
+          .sharpen({ sigma: 1.25, m1: 1.0, m2: 2.0 })
+          .modulate({ brightness: 0.98, saturation: 1.22 })
+          .jpeg({ quality: 90 })
+          .toBuffer();
+      } else {
+        // Shot A: Wide / Medium Framing with rich cinematic grading
+        return await sharp(bestImgBuf)
+          .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
+          .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
+          .modulate({ brightness: 0.98, saturation: 1.18 })
+          .jpeg({ quality: 88 })
+          .toBuffer();
+      }
     } catch (e) {}
   }
 
@@ -592,60 +608,6 @@ function concatenateWavFilesSampleExact(wavPaths, outputMasterWavPath) {
   return totalPcmBytes / (44100 * 4);
 }
 
-function trimSceneWavForSeamlessLoop(asset, mode) {
-  if (!asset || !asset.wordBoundaries || asset.wordBoundaries.length === 0) return;
-
-  const buf = fs.readFileSync(asset.audioWavPath);
-  if (buf.length <= 44) return;
-  const pcm = buf.subarray(44);
-  const bytesPerFrame = 4;
-  const sampleRate = 44100;
-
-  let startByte = 0;
-  let endByte = pcm.length;
-  let trimStartSec = 0;
-
-  if (mode === 'start') {
-    const firstWb = asset.wordBoundaries[0];
-    trimStartSec = Math.max(0, firstWb.offsetSec - 0.025);
-    const startFrame = Math.floor(trimStartSec * sampleRate);
-    startByte = Math.min(pcm.length - bytesPerFrame, startFrame * bytesPerFrame);
-    trimStartSec = (startByte / bytesPerFrame) / sampleRate;
-  } else if (mode === 'end') {
-    const lastWb = asset.wordBoundaries[asset.wordBoundaries.length - 1];
-    const speechEndSec = lastWb.offsetSec + lastWb.durationSec + 0.035;
-    const endFrame = Math.ceil(speechEndSec * sampleRate);
-    endByte = Math.min(pcm.length, Math.max(bytesPerFrame * 4410, endFrame * bytesPerFrame));
-  }
-
-  if (startByte === 0 && endByte === pcm.length) return;
-
-  const slicedPcm = pcm.subarray(startByte, endByte);
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + slicedPcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(2, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(sampleRate * bytesPerFrame, 28);
-  header.writeUInt16LE(bytesPerFrame, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(slicedPcm.length, 40);
-
-  fs.writeFileSync(asset.audioWavPath, Buffer.concat([header, slicedPcm]));
-  asset.duration = slicedPcm.length / (sampleRate * bytesPerFrame);
-
-  if (mode === 'start' && trimStartSec > 0) {
-    asset.wordBoundaries = asset.wordBoundaries.map(wb => ({
-      ...wb,
-      offsetSec: Math.max(0, wb.offsetSec - trimStartSec)
-    }));
-  }
-}
 
 // Clean 720x1280 HD Frame Renderer: Rock-Solid Zero-Tremor Photos + 0.08s Film Flash + 3-Color Semantic Karaoke Subtitles + Podcast Badge!
 // Pre-baked 720x1280 buffer composite runs in < 25ms per frame (under 2.2s for the entire video!), zero shaking, zero Vercel timeouts!
@@ -657,6 +619,7 @@ async function renderCaptionedFrame({
   palette = null,
   progressRatio,
   speakerInfo = null,
+  topicBadge = null,
   outputFramePath
 }) {
   const pal = palette || getAtmospherePalette('cosmic');
@@ -678,49 +641,75 @@ async function renderCaptionedFrame({
     return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
   }).join('\n');
 
-  const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
+  // Floating Progress Bar width
+  const barMaxW = WIDTH - 56; // 664px
+  const progressWidth = Math.max(14, Math.round(barMaxW * progressRatio));
 
-  // UPGRADE #6: 0.08s Film Flash (+22% exposure pop on the first frame of each new photo cut)
+  // UPGRADE #6: 0.08s Film Flash (+24% exposure pop on the first frame of each new photo cut)
   const flashOverlayRect = isTransitionFlash
-    ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF" fill-opacity="0.22"/>`
+    ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF" fill-opacity="0.24"/>`
     : '';
 
-  // Host Indicator Badge for Duet Podcast Mode (Glowing pill centered near top)
+  // Studio Category Topic Tag (Top Center, y=22)
+  const categoryBadgeSvg = topicBadge ? `
+    <g opacity="0.92">
+      <rect x="210" y="22" width="300" height="26" rx="13" fill="#050711" fill-opacity="0.84" stroke="${pal.accent}" stroke-width="1.2" stroke-opacity="0.6"/>
+      <text x="360" y="39" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="10.5" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">
+        ● ${String(topicBadge).toUpperCase()}
+      </text>
+    </g>` : '';
+
+  // Host Indicator Badge for Duet Podcast Mode (Glowing pill below topic badge, y=56)
   const speakerBadgeSvg = (speakerInfo && speakerInfo.name) ? `
     <g opacity="0.96">
       <defs>
         <filter id="badgeGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="${speakerInfo.color}" flood-opacity="0.45"/>
+          <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="${speakerInfo.color}" flood-opacity="0.5"/>
         </filter>
       </defs>
-      <rect x="235" y="60" width="250" height="40" rx="20" fill="#080a14" fill-opacity="0.88" stroke="${speakerInfo.color}" stroke-width="2" filter="url(#badgeGlow)"/>
-      <text x="360" y="86" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="15" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">
+      <rect x="235" y="56" width="250" height="38" rx="19" fill="#070914" fill-opacity="0.90" stroke="${speakerInfo.color}" stroke-width="2" filter="url(#badgeGlow)"/>
+      <text x="360" y="81" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="14.5" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">
         ${speakerInfo.emoji} ${speakerInfo.name.toUpperCase()} 🎙️
       </text>
     </g>` : '';
 
-  // Clean HUD SVG: Dark Vignette Gradient + Film Flash + 3-Color Karaoke Subtitles + Podcast Host Badge + Progress Bar ONLY!
+  // Clean HUD SVG: Dual Cinema Vignettes + Film Flash + 3-Color Subtitles + Badges + Floating Neon Progress Bar
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0.08"/>
-        <stop offset="55%" stop-color="#000000" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="#04060c" stop-opacity="0.80"/>
+      <linearGradient id="topVignette" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#020308" stop-opacity="0.75"/>
+        <stop offset="60%" stop-color="#020308" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0.00"/>
+      </linearGradient>
+      <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.00"/>
+        <stop offset="35%" stop-color="#020308" stop-opacity="0.50"/>
+        <stop offset="100%" stop-color="#03050c" stop-opacity="0.92"/>
+      </linearGradient>
+      <linearGradient id="progressGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#00F5D4"/>
+        <stop offset="100%" stop-color="#00E676"/>
       </linearGradient>
     </defs>
-    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
+    <!-- Top Cinema Vignette (Protects HUD & Host Badges) -->
+    <rect width="${WIDTH}" height="160" fill="url(#topVignette)"/>
+    <!-- Bottom Cinema Vignette (Ensures 100% Subtitle Contrast) -->
+    <rect y="670" width="${WIDTH}" height="610" fill="url(#bottomVignette)"/>
     ${flashOverlayRect}
+    ${categoryBadgeSvg}
     ${speakerBadgeSvg}
     <g>
       ${subtitleLinesSvg}
     </g>
-    <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
+    <!-- Floating Modern Neon Progress Bar -->
+    <rect x="28" y="${HEIGHT - 22}" width="${barMaxW}" height="8" rx="4" fill="#000000" fill-opacity="0.6"/>
+    <rect x="28" y="${HEIGHT - 22}" width="${progressWidth}" height="8" rx="4" fill="url(#progressGrad)"/>
+    <circle cx="${Math.min(WIDTH - 28, 28 + progressWidth)}" cy="${HEIGHT - 18}" r="5.5" fill="#FFFFFF" stroke="#00F5D4" stroke-width="2"/>
   </svg>`;
 
   await sharp(photoBuffer)
     .composite([{ input: Buffer.from(hudSvg), top: 0, left: 0 }])
-    .jpeg({ quality: 84 })
+    .jpeg({ quality: 86 })
     .toFile(outputFramePath);
 }
 
@@ -780,8 +769,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     return Promise.all(scenes.map(async (_, i) => {
       const pQ = photoQueues[i] || photoQueues[0] || { queueA: [], queueB: [] };
       const [photoBufA, photoBufB] = await Promise.all([
-        prepareScenePhotoBuffer(pQ.queueA, colorTheme),
-        prepareScenePhotoBuffer(pQ.queueB, colorTheme)
+        prepareScenePhotoBuffer(pQ.queueA, colorTheme, false),
+        prepareScenePhotoBuffer(pQ.queueB, colorTheme, true)
       ]);
       return { photoBufA, photoBufB };
     }));
@@ -821,12 +810,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += ttsResult.duration;
   }
 
-  // SEAMLESS INFINITE LOOP (ACOUSTIC ZERO-GAP TRIM):
-  if (sceneAssets.length >= 2) {
-    trimSceneWavForSeamlessLoop(sceneAssets[0], 'start');
-    trimSceneWavForSeamlessLoop(sceneAssets[sceneAssets.length - 1], 'end');
-  }
-
+  // Standalone viral structure (natural start + impactful retention + clear CTA ending)
   sceneStartTimes.length = 0;
   const midCutTimes = [];
   totalDuration = 0;
@@ -851,9 +835,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     const halfIdx = Math.max(1, Math.floor(timedChunks.length / 2));
     let sceneElapsed = 0;
 
-    // On the final loop scene, use Scene 1's Photo A in the 2nd half so the visual loop to 0:00 is seamless!
-    const isLastScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
-    const secondHalfBuf = isLastScene ? sceneAssets[0].photoBufA : asset.photoBufB;
+    // Shot A = Medium angle / Shot B = Dynamic Punch-In cut (no photo repeating across scenes)
+    const secondHalfBuf = asset.photoBufB;
 
     for (let c = 0; c < timedChunks.length; c++) {
       const framePath = path.join(tmpDir, `frame_${i}_${c}.jpg`);
@@ -865,7 +848,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       const isFirstHalf = (c < halfIdx);
       const photoBuffer = isFirstHalf ? asset.photoBufA : secondHalfBuf;
 
-      // UPGRADE #6: Trigger 0.08s Film Flash on the very first frame of each new photo (c === 0 or c === halfIdx)
+      // UPGRADE #6: Trigger 0.08s Film Flash on the very first frame of each new photo cut
       const isTransitionFlash = (c === 0 || c === halfIdx);
 
       // UPGRADE #5: Collect exact timestamp if the active word is a Gold Number or Danger Shock word
@@ -883,6 +866,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         palette,
         progressRatio,
         speakerInfo: asset.speakerInfo,
+        topicBadge: scriptData.badge || 'FATOS CURIOSOS & CIÊNCIA',
         outputFramePath: framePath
       });
 
@@ -918,13 +902,14 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalMp4Path = path.join(outDir, finalFilename);
 
   // Ultra-Fast StillImage Concat Muxing: ~1.4s encode time, 100% rock-solid, zero trembling, zero 504 timeouts!
+  const audioFadeStart = Math.max(0, exactVoiceDur - 0.40).toFixed(2);
   const ffmpegArgs = [
     '-y',
     '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
     '-filter_complex',
-    '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
+    `[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
