@@ -670,19 +670,32 @@
 
       const scenesContainer = document.getElementById('previewScriptScenes');
       const scenes = script.scenes || [];
+      const currentVoice = (document.getElementById('voiceSelect') && document.getElementById('voiceSelect').value) || 'duet-podcast';
+      const isDuet = (currentVoice === 'duet-podcast');
 
-      scenesContainer.innerHTML = scenes.map((s, idx) => `
-        <div class="editor-scene-card" style="background:rgba(0,0,0,0.42); border:1px solid rgba(255,255,255,0.12); padding:10px; border-radius:10px;">
+      scenesContainer.innerHTML = scenes.map((s, idx) => {
+        const isAntonio = isDuet && (s.speaker === 'Antônio' || (idx % 2 === 1));
+        const speakerTag = isDuet
+          ? (isAntonio ? '👨🎙️ ANTÔNIO (Voz Masculina • Reação / Números)' : '👩🎙️ THALITA (Voz Feminina • Apresentadora)')
+          : '🎙️ Fala da Narração (Voz Solo)';
+        const cardBorder = isDuet
+          ? (isAntonio ? 'border:1px solid rgba(0,240,255,0.45); background:rgba(0,240,255,0.04);' : 'border:1px solid rgba(255,45,85,0.45); background:rgba(255,45,85,0.04);')
+          : 'border:1px solid rgba(255,255,255,0.12); background:rgba(0,0,0,0.42);';
+        const speakerBadgeColor = isAntonio ? '#00f0ff' : '#ff6b81';
+
+        return `
+        <div class="editor-scene-card" style="border-radius:10px; padding:10px; margin-bottom:8px; ${cardBorder}">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="color:#00f0ff; font-size:0.78rem;">🎬 Cena ${idx + 1}/${scenes.length} • ${escapeHtmlAttr(s.sceneLabel || 'Cena')}</strong>
+            <strong style="color:${speakerBadgeColor}; font-size:0.78rem;">🎬 Cena ${idx + 1}/${scenes.length} • ${speakerTag}</strong>
             ${scenes.length > 2 ? `<button type="button" class="btn-secondary" style="padding:3px 8px; font-size:0.68rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="removeEditorScene(${idx})">🗑️ Excluir</button>` : ''}
           </div>
-          <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">🎙️ Fala da Narradora (Voz Feminina Natural):</label>
-          <textarea class="scene-narration-input" rows="3" oninput="updateLiveLoopBridge()" style="width:100%; background:#07080d; color:#fff; border:1px solid rgba(0,240,255,0.28); border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
+          <label style="display:block; font-size:0.7rem; color:${speakerBadgeColor}; font-weight:800; margin-bottom:3px;">${speakerTag}:</label>
+          <textarea class="scene-narration-input" rows="3" oninput="updateLiveLoopBridge()" style="width:100%; background:#07080d; color:#fff; border:1px solid ${isAntonio ? 'rgba(0,240,255,0.35)' : 'rgba(255,45,85,0.35)'}; border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
           <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">📸 Busca da Foto Real (Wikipédia / Wikimedia):</label>
           <input type="text" class="scene-photo-input" value="${escapeHtmlAttr(s.imageQuery || script.sourceTopic || '')}" style="width:100%; background:#07080d; color:#b8eaff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:7px; font-size:0.76rem;" />
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       updateLiveLoopBridge();
     }
@@ -696,14 +709,19 @@
       const hashtags = rawTags.length > 0 ? rawTags.join(' ') : currentPreviewScript.hashtags;
       const narrationEls = Array.from(document.querySelectorAll('.scene-narration-input'));
       const photoEls = Array.from(document.querySelectorAll('.scene-photo-input'));
+      const currentVoice = (document.getElementById('voiceSelect') && document.getElementById('voiceSelect').value) || 'duet-podcast';
+      const isDuet = (currentVoice === 'duet-podcast');
 
       const updatedScenes = narrationEls.map((el, idx) => {
         const orig = (currentPreviewScript.scenes && currentPreviewScript.scenes[idx]) || {};
+        const isAntonio = isDuet && (orig.speaker === 'Antônio' || (idx % 2 === 1));
         return {
           ...orig,
           narration: el.value.trim() || orig.narration || 'Fato curioso impressionante.',
           imageQuery: (photoEls[idx] && photoEls[idx].value.trim()) || orig.imageQuery || cleanCoverTitle,
-          sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${cleanCoverTitle.slice(0, 28)}`
+          sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${cleanCoverTitle.slice(0, 28)}`,
+          speaker: isDuet ? (isAntonio ? 'Antônio' : 'Thalita') : 'Solo',
+          voice: isDuet ? (isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural') : currentVoice
         };
       });
 
@@ -800,19 +818,27 @@
 
       const editedScript = usePreviewedScript ? syncCurrentScriptFromInputs() : null;
 
+      const isDuet = (voice === 'duet-podcast');
       btn.disabled = true;
       statusBox.style.display = 'block';
-      updateProgress(12, usePreviewedScript ? 'Gravando seu roteiro Studio 2.0 (Voz Thalita 👩🎙️ + Pílula Neon)...' : 'Studio 2.0: Buscando 14 fotos reais + Voz Thalita Emocional 👩🎙️...');
+      updateProgress(12, isDuet
+        ? (usePreviewedScript ? 'Dueto Podcast Ativo: Gravando Thalita 👩 + Antônio 👨...' : 'Dueto Podcast: Buscando 14 fotos reais + Gravando Thalita 👩 & Antônio 👨...')
+        : (usePreviewedScript ? 'Studio 4.0: Gravando seu roteiro Studio 4.0...' : 'Studio 4.0: Buscando 14 fotos reais + Voz Emocional...'));
 
       // Smooth progress ticker for synchronous Vercel Serverless execution
       let simPct = 14;
       const simTimer = setInterval(() => {
         if (simPct < 92) {
           simPct += 4;
-          const msgs = [
+          const msgs = isDuet ? [
+            'Sincronizando 14 fotos reais HD da Web em lote único...',
+            'Gravando Dueto Podcast: Thalita 👩 + Antônio 👨 (WordBoundary)...',
+            'Renderizando Cinema 9:16 + Badge Podcast Dueto + Karaokê 3 Cores...',
+            'Mixando Sound Design + Voz Shure SM7B + Loop Infinito 🔁...'
+          ] : [
             'Baixando 14 fotos reais verificadas (Shot A + Shot B) em lote único...',
-            'Gravando voz Thalita Neural com curva de emoção por cena (WordBoundary)...',
-            'Renderizando Cinema Full-Screen 9:16 + Karaokê Pílula Neon + Dados Reais...',
+            'Gravando voz Neural com curva de emoção por cena (WordBoundary)...',
+            'Renderizando Cinema Full-Screen 9:16 + Karaokê 3 Cores + Dados Reais...',
             'Mixando Sound Design 14 Cortes (Sub-Bass + Whooshes) + Loop Infinito 🔁...'
           ];
           updateProgress(simPct, msgs[Math.min(3, Math.floor((simPct - 14) / 20))]);
@@ -1438,6 +1464,12 @@
     }
 
     loadHistoryGallery();
+    const voiceSel = document.getElementById('voiceSelect');
+    if (voiceSel) {
+      voiceSel.addEventListener('change', () => {
+        if (currentPreviewScript) renderScriptEditor(currentPreviewScript);
+      });
+    }
   </script>
 </body>
 </html>
