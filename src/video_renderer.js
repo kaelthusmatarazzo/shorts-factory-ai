@@ -88,10 +88,28 @@ function getTensionPhaseInfo(sceneIdx = 0, totalScenes = 7) {
   return { label: 'FASE 1 • A DESCOBERTA', dotColor: '#00E676', borderColor: '#00E676' };
 }
 
+// UPGRADE #2 & #5: 3-Color Psychological Semantic Classifier (syncs Visual Pill Color + Audio Word-Triggered SFX!)
+function classifySemanticWordStyle(wordText) {
+  const w = String(wordText || '').toLowerCase();
+  // 🟡 GOLD_NUMBER: Numbers, percentages, extreme magnitudes, and dates
+  if (/\d|%|km|metros|quilôm|graus|°c|bilh|milh|trilh|mil\b|tonelad|século|anos|dobro|triplo|zero|infinit/i.test(w)) {
+    return { pillFill: '#FFD700', pillText: '#05050A', scaleMult: 1.18, sfxType: 'gold_number' };
+  }
+  // 🔴 DANGER_SHOCK: Danger, secrecy, death, impossibility, shock
+  if (/secret|proibid|morte|mort|derret|imposs|erro|medo|terror|explod|explos|abismo|inferno|sangue|veneno|fatal|extin|destru|jamais|nunca|choque|chocant|bizarro|assustador|perigo|maldi|mistéri|ocult|escondid|pânico|violav/i.test(w)) {
+    return { pillFill: '#FF2A54', pillText: '#FFFFFF', scaleMult: 1.16, sfxType: 'danger_shock' };
+  }
+  // 🟢 NEON_DEFAULT: Electric Cyan active pill
+  return { pillFill: '#00F5D4', pillText: '#05050A', scaleMult: 1.12, sfxType: null };
+}
+
 function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610, palette = null) {
-  const pal = palette || getAtmospherePalette('cosmic');
   const cleanedItems = lineItems
-    .map(item => ({ word: cleanDisplayString(item.word).toUpperCase(), isHighlighted: item.isHighlighted }))
+    .map(item => ({
+      word: cleanDisplayString(item.word).toUpperCase(),
+      isHighlighted: item.isHighlighted,
+      sem: classifySemanticWordStyle(item.word)
+    }))
     .filter(item => item.word.length > 0);
 
   if (cleanedItems.length === 0) return '';
@@ -101,7 +119,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
     const spaceW = fSize * 0.36;
     let total = 0;
     cleanedItems.forEach((it, idx) => {
-      const wFont = it.isHighlighted ? Math.round(fSize * 1.15) : fSize;
+      const wFont = it.isHighlighted ? Math.round(fSize * it.sem.scaleMult) : fSize;
       total += hormoziFont.getAdvanceWidth(it.word, wFont);
       if (idx < cleanedItems.length - 1) total += spaceW;
     });
@@ -122,8 +140,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
   for (let i = 0; i < cleanedItems.length; i++) {
     const it = cleanedItems[i];
-    // IMPROVEMENT #3: 15% Elastic Pop-Zoom on the exact active word being spoken!
-    const wordFontSize = it.isHighlighted ? Math.round(fontSize * 1.15) : fontSize;
+    const wordFontSize = it.isHighlighted ? Math.round(fontSize * it.sem.scaleMult) : fontSize;
     const wWidth = hormoziFont.getAdvanceWidth(it.word, wordFontSize);
     const activeBaselineY = it.isHighlighted ? Math.round(baselineY + (wordFontSize - fontSize) * 0.25) : baselineY;
 
@@ -132,14 +149,18 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
 
     if (it.isHighlighted) {
       const padX = Math.round(wordFontSize * 0.22);
-      const pillH = Math.round(wordFontSize * 1.22);
-      const pillY = Math.round(activeBaselineY - wordFontSize * 0.91);
+      const pillH = Math.round(wordFontSize * 1.24);
+      const pillY = Math.round(activeBaselineY - wordFontSize * 0.92);
       const pillW = Math.round(wWidth + padX * 2);
       const pillX = Math.round(curX - padX);
 
-      pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="15" fill="#000000" fill-opacity="0.85"/>`;
-      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="15" fill="${pal.pillFill}" stroke="#000000" stroke-width="4"/>`;
-      fgPaths += `<path d="${dMain}" fill="${pal.pillText}" stroke="${pal.pillText}" stroke-width="1.5" stroke-linejoin="round"/>`;
+      pillRects += `<rect x="${pillX + 4}" y="${pillY + 5}" width="${pillW}" height="${pillH}" rx="15" fill="#000000" fill-opacity="0.88"/>`;
+      pillRects += `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="15" fill="${it.sem.pillFill}" stroke="#000000" stroke-width="4"/>`;
+      if (it.sem.pillText === '#FFFFFF') {
+        fgPaths += `<path d="${dMain}" fill="#FFFFFF" stroke="#000000" stroke-width="4" stroke-linejoin="round"/><path d="${dMain}" fill="#FFFFFF"/>`;
+      } else {
+        fgPaths += `<path d="${dMain}" fill="${it.sem.pillText}" stroke="${it.sem.pillText}" stroke-width="1.5" stroke-linejoin="round"/>`;
+      }
     } else {
       shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
       fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="#FFFFFF"/>`;
@@ -262,7 +283,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Run 4 Parallel Web Image Searches (Google/Bing Web Photo Index with Smart-Salience 720x1280 9:16 HD Crop!)
+  // 2. UPGRADE #1: Run Topic Web Image Searches + Scene-Specific 1:1 Visual Action Queries in Parallel!
   const uaBrowser = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   const enQueryBase = enTitleClean || fullSourceTopic || rawTopic;
   const webSearchQueries = [
@@ -272,22 +293,51 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     `${enQueryBase} aerial view cinematic photography HD -youtube -map`
   ];
 
-  await Promise.allSettled(webSearchQueries.map(async (qStr) => {
-    const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(qStr)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': uaBrowser },
-      signal: AbortSignal.timeout(2200)
-    });
-    if (!res.ok) return;
-    const html = await res.text();
-    for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
-      const murl = m[1];
-      const turl = m[2].replace(/&amp;/g, '&');
-      // Request Smart-Salience AI 720x1280 9:16 vertical crop at 95% JPEG quality from global Edge CDN!
-      const smartCropCdnUrl = `${turl}&w=720&h=1280&c=7&rs=1&qlt=95`;
-      addWebPhotoCandidate(smartCropCdnUrl, murl, qStr);
-    }
-  }));
+  // Also build per-scene specific search queries (Visual 1:1 match with the spoken sentence!)
+  const sceneSpecificPools = scenes.map(() => []);
+  const addScenePhotoCandidate = (sIdx, cdnUrl, murl = '') => {
+    if (!cdnUrl) return;
+    const checkStr = String(murl || '').toLowerCase();
+    if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
+    sceneSpecificPools[sIdx].push({ cdnUrl, murl: murl || cdnUrl });
+    addWebPhotoCandidate(cdnUrl, murl);
+  };
+
+  await Promise.allSettled([
+    ...webSearchQueries.map(async (qStr) => {
+      const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(qStr)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
+      const res = await fetch(searchUrl, {
+        headers: { 'User-Agent': uaBrowser },
+        signal: AbortSignal.timeout(2200)
+      });
+      if (!res.ok) return;
+      const html = await res.text();
+      for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
+        const murl = m[1];
+        const turl = m[2].replace(/&amp;/g, '&');
+        const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
+        addWebPhotoCandidate(smartCropCdnUrl, murl);
+      }
+    }),
+    ...scenes.map(async (sc, sIdx) => {
+      const visKw = sc.sceneVisualKeywords || '';
+      if (!visKw) return;
+      const sceneQ = `${enQueryBase} ${visKw} real photo HD -youtube -map -chart`;
+      const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(sceneQ)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
+      const res = await fetch(searchUrl, {
+        headers: { 'User-Agent': uaBrowser },
+        signal: AbortSignal.timeout(2100)
+      });
+      if (!res.ok) return;
+      const html = await res.text();
+      for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
+        const murl = m[1];
+        const turl = m[2].replace(/&amp;/g, '&');
+        const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
+        addScenePhotoCandidate(sIdx, smartCropCdnUrl, murl);
+      }
+    })
+  ]);
 
   const curatedFallbacks = [
     'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&q=85',
@@ -297,18 +347,31 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1080&q=85',
     'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=1080&q=85'
   ];
-  for (const fb of curatedFallbacks) addWebPhotoCandidate(fb, fb, 'fallback_cinema');
+  for (const fb of curatedFallbacks) addWebPhotoCandidate(fb, fb);
 
-  console.log(`📸 [Web Image Search Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} FOTOS REAIS DA WEB HD encontradas!`);
+  console.log(`📸 [Web Image Search 1:1 Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} FOTOS REAIS DA WEB HD encontradas!`);
 
-  // Assign 2 distinct real web photos per scene (each with 4 candidate URLs so Computer Vision Quality Gate always picks a 10/10 photo!)
+  // Assign 2 distinct real web photos per scene (prioritizing Scene-Specific 1:1 match + Topic Pool!)
   let pCursor = 0;
+  const usedAcrossVideo = new Set();
   return scenes.map((_, sIdx) => {
-    const pickCandidates = (offset) => {
+    const sPool = sceneSpecificPools[sIdx] || [];
+    const pickCandidates = (offset, halfSlot) => {
       const urls = [];
-      for (let k = 0; k < 4; k++) {
+      // 1st priority: Scene-Specific 1:1 visual action photo not yet used
+      for (let m = halfSlot; m < sPool.length && urls.length < 2; m += 2) {
+        const sp = sPool[m];
+        if (sp && !usedAcrossVideo.has(sp.cdnUrl)) {
+          usedAcrossVideo.add(sp.cdnUrl);
+          urls.push(sp.cdnUrl);
+          if (sp.murl && sp.murl !== sp.cdnUrl) urls.push(sp.murl);
+        }
+      }
+      // 2nd priority: Global Topic Web Photo Pool
+      for (let k = 0; k < 5 && urls.length < 6; k++) {
         const item = pool[(offset + k * 3) % pool.length];
-        if (item) {
+        if (item && !usedAcrossVideo.has(item.cdnUrl)) {
+          usedAcrossVideo.add(item.cdnUrl);
           urls.push(item.cdnUrl);
           if (item.murl && item.murl !== item.cdnUrl) urls.push(item.murl);
         }
@@ -316,13 +379,16 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       urls.push(curatedFallbacks[offset % curatedFallbacks.length]);
       return urls.filter(Boolean);
     };
-    const qA = pickCandidates(pCursor++);
-    const qB = pickCandidates(pCursor++);
+    const qA = pickCandidates(pCursor++, 0);
+    const qB = pickCandidates(pCursor++, 1);
     return { queueA: qA, queueB: qB };
   });
 }
 
-// Downloads a real web photo, validates it via Sharp Computer Vision Quality Gate (rejects white slides/blurry/low-entropy), and applies Cinema Unsharp Mask!
+// UPGRADE #3: Downloads a real web photo, validates via Computer Vision Quality Gate, and creates an 800x1422 Master Overscan Buffer for smooth monotonic Ken Burns zoom!
+const OVERSCAN_W = 800;
+const OVERSCAN_H = 1422;
+
 async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
   const pal = getAtmospherePalette(colorTheme);
   let bestImgBuf = null;
@@ -339,7 +405,6 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
       if (res.ok) {
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.length > 15000) {
-          // Computer Vision Quality Gate: check brightness, contrast (stdev), and photographic detail (entropy)
           const st = await sharp(buf).stats();
           const c0 = st.channels[0] || { mean: 128, stdev: 45 };
           const c1 = st.channels[1] || c0;
@@ -348,7 +413,6 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
           const avgStdev = (c0.stdev + c1.stdev + c2.stdev) / 3;
           const entropy = st.entropy || 7.0;
 
-          // Reject white-background text slides (avgMean > 216), pitch-black errors (< 16), or flat/blurry graphics (avgStdev < 30 or entropy < 6.25)
           if (avgMean >= 16 && avgMean <= 216 && avgStdev >= 30 && entropy >= 6.25) {
             bestImgBuf = buf;
             break;
@@ -359,33 +423,20 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
     } catch (e) {}
   }
 
-  // Subtle dark gradient at the bottom so the Karaoke Subtitles pop with 100% contrast
-  const vignetteSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
-        <stop offset="55%" stop-color="#000000" stop-opacity="0.16"/>
-        <stop offset="100%" stop-color="#04060c" stop-opacity="0.78"/>
-      </linearGradient>
-    </defs>
-    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
-  </svg>`;
-
   if (bestImgBuf) {
     try {
       return await sharp(bestImgBuf)
-        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
+        .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
         .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
         .modulate({ brightness: 0.98, saturation: 1.18 })
-        .composite([{ input: Buffer.from(vignetteSvg), top: 0, left: 0 }])
-        .jpeg({ quality: 86 })
+        .jpeg({ quality: 88 })
         .toBuffer();
     } catch (e) {}
   }
 
   // Fallback dark studio canvas if offline
-  const fallbackSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="${WIDTH}" height="${HEIGHT}" fill="${pal.bgGradTop}"/>
+  const fallbackSvg = `<svg width="${OVERSCAN_W}" height="${OVERSCAN_H}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${OVERSCAN_W}" height="${OVERSCAN_H}" fill="${pal.bgGradTop}"/>
   </svg>`;
   return sharp(Buffer.from(fallbackSvg)).jpeg({ quality: 82 }).toBuffer();
 }
@@ -581,9 +632,11 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Clean 720x1280 HD Frame Renderer: Real Topic Photo + Hormozi Karaoke Subtitles ONLY (zero extra text badges, zero shaking!)
+// Clean 720x1280 HD Frame Renderer: Monotonic Ken Burns Zoom + 0.08s Film Flash + 3-Color Semantic Karaoke Subtitles ONLY!
 async function renderCaptionedFrame({
   photoBuffer,
+  zoomProgress = 0,
+  isTransitionFlash = false,
   wordsChunk,
   activeWordIdx = 0,
   palette = null,
@@ -611,8 +664,22 @@ async function renderCaptionedFrame({
 
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
-  // Clean HUD SVG containing ONLY Karaoke Subtitles + Bottom Progress Bar!
+  // UPGRADE #6: 0.08s Film Flash (+22% brightness pulse on the very first frame of each of the 14 photos)
+  const flashOverlayRect = isTransitionFlash
+    ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF" fill-opacity="0.22"/>`
+    : '';
+
+  // Clean HUD SVG containing Bottom Vignette + Film Flash + Karaoke Subtitles + Bottom Progress Bar ONLY!
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
+        <stop offset="55%" stop-color="#000000" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#04060c" stop-opacity="0.78"/>
+      </linearGradient>
+    </defs>
+    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
+    ${flashOverlayRect}
     <g>
       ${subtitleLinesSvg}
     </g>
@@ -620,13 +687,23 @@ async function renderCaptionedFrame({
     <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
+  // UPGRADE #3: Monotonic Center-Locked Ken Burns Zoom (1.00x -> 1.09x from 800x1422 Overscan Buffer — zero shaking!)
+  const clampedProg = Math.max(0, Math.min(1, zoomProgress));
+  const scaleFactor = 1.0 - (clampedProg * 0.088);
+  const cropW = Math.max(WIDTH, Math.round(OVERSCAN_W * scaleFactor));
+  const cropH = Math.max(HEIGHT, Math.round(OVERSCAN_H * scaleFactor));
+  const left = Math.round((OVERSCAN_W - cropW) / 2);
+  const top = Math.round((OVERSCAN_H - cropH) / 2);
+
   await sharp(photoBuffer)
+    .extract({ left, top, width: cropW, height: cropH })
+    .resize(WIDTH, HEIGHT)
     .composite([{ input: Buffer.from(hudSvg), top: 0, left: 0 }])
     .jpeg({ quality: 84 })
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 4.0 Master Timeline Renderer (14 Real Photos HD + Clean Karaoke Subtitles — finishes in ~10s!)
+// Single-Pass Studio 4.0 Master Timeline Renderer (All 6 Retention Upgrades Active!)
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -649,13 +726,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const palette = getAtmospherePalette(colorTheme);
 
-  onProgress(15, 'Studio 4.0: Baixando 14 Fotos Reais HD + Gravando Vozes Simultaneamente...');
+  onProgress(15, 'Studio 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Run ALL Neural Voice Synthesis AND 14 Real Photo Downloads AT THE EXACT SAME TIME!
+  // 1. Run ALL Neural Voice Synthesis AND 14 Real 1:1 Web Photo Downloads AT THE EXACT SAME TIME!
   const ttsJobsPromise = Promise.all(scenes.map(async (s, i) => {
     const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
     let sceneVoice = voiceName;
@@ -686,7 +763,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     photosPreparePromise
   ]);
 
-  onProgress(52, 'Sincronizando 14 Fotos Reais HD com as Vozes...');
+  onProgress(52, 'Sincronizando 14 Fotos Web HD + Efeitos por Palavra...');
 
   for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult } = ttsResults[i];
@@ -719,13 +796,14 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando Quadros 720x1280 HD + Legendas Karaokê...');
+  onProgress(68, 'Renderizando Ken Burns Suave + Legendas Karaokê 3 Cores...');
 
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
   let lastRenderedFramePath = null;
   const frameJobs = [];
+  const wordTriggerEvents = [];
 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
@@ -740,13 +818,32 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     for (let c = 0; c < timedChunks.length; c++) {
       const framePath = path.join(tmpDir, `frame_${i}_${c}.jpg`);
       const thisChunkDur = timedChunks[c].duration;
+      const chunkStartAbsSec = elapsedDuration + sceneElapsed;
       sceneElapsed += thisChunkDur;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
 
-      const photoBuffer = (c < halfIdx) ? asset.photoBufA : secondHalfBuf;
+      const isFirstHalf = (c < halfIdx);
+      const photoBuffer = isFirstHalf ? asset.photoBufA : secondHalfBuf;
+
+      // UPGRADE #3: Strictly monotonic 0.0 -> 1.0 Ken Burns zoom progress within each half-scene
+      const zoomProgress = isFirstHalf
+        ? (c / Math.max(1, halfIdx - 1))
+        : ((c - halfIdx) / Math.max(1, (timedChunks.length - halfIdx) - 1));
+
+      // UPGRADE #6: Trigger 0.08s Film Flash on the very first frame of each new photo (c === 0 or c === halfIdx)
+      const isTransitionFlash = (c === 0 || c === halfIdx);
+
+      // UPGRADE #5: Collect exact timestamp if the active word is a Gold Number or Danger Shock word
+      const activeW = timedChunks[c].words[timedChunks[c].activeWordIdx] || '';
+      const semStyle = classifySemanticWordStyle(activeW);
+      if (semStyle.sfxType) {
+        wordTriggerEvents.push({ timeSec: chunkStartAbsSec, type: semStyle.sfxType, word: activeW });
+      }
 
       frameJobs.push({
         photoBuffer,
+        zoomProgress,
+        isTransitionFlash,
         wordsChunk: timedChunks[c].words,
         activeWordIdx: timedChunks[c].activeWordIdx,
         palette,
@@ -774,13 +871,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(86, 'Masterizando Vídeo 720x1280 HD + Voz Shure SM7B...');
+  onProgress(86, 'Masterizando Vídeo 720x1280 HD + SFX por Palavra + Voz Shure SM7B...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
 
   const bgMusicWav = path.join(tmpDir, 'bgm.wav');
-  genBgm(bgMusicWav, exactVoiceDur, colorTheme || scriptData.musicMood || 'cosmic', sceneStartTimes, midCutTimes);
+  genBgm(bgMusicWav, exactVoiceDur, colorTheme || scriptData.musicMood || 'cosmic', sceneStartTimes, midCutTimes, wordTriggerEvents);
 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
