@@ -317,7 +317,7 @@
           <input id="editScriptTags" type="text" style="width:100%; background:#0b0c14; color:var(--primary); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:0.78rem; font-weight:700;" />
         </div>
 
-        <div id="previewLoopBridgeBox" style="background:rgba(0,230,118,0.09); border:1px solid rgba(0,230,118,0.45); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.76rem; line-height:1.4;"></div>
+        <div id="previewStructureBox" style="background:rgba(0,240,255,0.08); border:1px solid rgba(0,240,255,0.4); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.76rem; line-height:1.4;"></div>
 
         <label style="display:block; font-size:0.75rem; color:#00f0ff; font-weight:800; margin-bottom:8px; text-transform:uppercase;">🎬 Fala da Narradora & Foto de Cada Cena:</label>
         <div id="previewScriptScenes" style="display:flex; flex-direction:column; gap:10px; font-size:0.8rem; color:#d0d0e8; margin-bottom:12px;"></div>
@@ -368,8 +368,8 @@
       <div class="field custom-topic">
         <label>Formato & Monetização</label>
         <select id="durationSelect">
-          <option value="monetized" selected>💰 TikTok Monetizado (>1 Minuto • 63s-75s + 🔁 Loop Infinito)</option>
-          <option value="short">⚡ Short Rápido (35s-45s • 4 Cenas + 🔁 Loop Infinito)</option>
+          <option value="monetized" selected>💰 TikTok Monetizado (>1 Minuto • 63s-75s + Conclusão Viral)</option>
+          <option value="short">⚡ Short Rápido (35s-45s • 4 Cenas + Conclusão Viral)</option>
         </select>
       </div>
 
@@ -398,7 +398,7 @@
       </div>
 
       <div class="video-frame">
-        <video id="shortPlayer" controls loop playsinline></video>
+        <video id="shortPlayer" controls playsinline></video>
       </div>
 
       <!-- BOTÕES DE DOWNLOAD E ENVIO DIRETO PRO CELULAR -->
@@ -455,10 +455,10 @@
         <p id="videoPinnedDisplay" style="color:#fff8c6; font-size:0.83rem; font-weight:600; line-height:1.45;"></p>
       </div>
 
-      <!-- CONEXÃO DO LOOP INFINITO (FINAL -> INÍCIO 0:00) -->
-      <div class="meta-box" style="border-color:rgba(0,230,118,0.35); background:rgba(0,230,118,0.05);">
-        <strong style="color:#00e676; margin-bottom:6px;">🔁 CONEXÃO DO LOOP INFINITO (FINAL ➔ INÍCIO 0:00)</strong>
-        <div id="videoLoopBridgeDisplay" style="font-size:0.78rem; color:#e0ffe8; line-height:1.4;"></div>
+      <!-- ESTRUTURA DO VÍDEO (GANCHO + RETENÇÃO + CONCLUSÃO COM CTA) -->
+      <div class="meta-box" style="border-color:rgba(0,240,255,0.35); background:rgba(0,240,255,0.05);">
+        <strong style="color:#00f0ff; margin-bottom:6px;">🎬 ESTRUTURA VIRAL (GANCHO + RETENÇÃO + CONCLUSÃO COM CTA)</strong>
+        <div id="videoStructureDisplay" style="font-size:0.78rem; color:#e0f7ff; line-height:1.4;"></div>
       </div>
     </div>
 
@@ -640,26 +640,26 @@
       return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function updateLiveLoopBridge() {
+    function updateLiveStructure() {
       const narrationInputs = Array.from(document.querySelectorAll('.scene-narration-input'));
       if (narrationInputs.length === 0) return;
       const firstNarration = narrationInputs[0].value.trim();
       const lastNarration = narrationInputs[narrationInputs.length - 1].value.trim();
 
-      const lastSentences = lastNarration.split(/(?<=[.!?])\s+/);
-      const endSnippet = lastSentences[lastSentences.length - 1] || lastNarration.slice(-85);
       const firstSentences = firstNarration.split(/(?<=[.!?])\s+/);
-      const startSnippet = firstSentences[0] || firstNarration.slice(0, 85);
+      const hookSnippet = firstSentences[0] || firstNarration.slice(0, 95);
+      const lastSentences = lastNarration.split(/(?<=[.!?])\s+/);
+      const ctaSnippet = lastSentences[lastSentences.length - 1] || lastNarration.slice(-95);
 
-      if (currentPreviewScript) {
-        currentPreviewScript.loopBridge = { endText: endSnippet, startText: startSnippet };
+      const targetBox = document.getElementById('previewStructureBox') || document.getElementById('previewLoopBridgeBox');
+      if (targetBox) {
+        targetBox.innerHTML =
+          `<div style="color:#00f0ff; font-weight:800; margin-bottom:4px;">🎯 Estrutura do Roteiro (Início Impactante ➔ CTA Final):</div>` +
+          `<div><strong>🪝 Gancho Inicial (0:00):</strong> "${escapeHtmlAttr(hookSnippet)}"</div>` +
+          `<div><strong>📢 Chamada Final (CTA):</strong> "${escapeHtmlAttr(ctaSnippet)}"</div>`;
       }
-
-      document.getElementById('previewLoopBridgeBox').innerHTML =
-        `<div style="color:#00e676; font-weight:800; margin-bottom:4px;">🔁 Encaixe em Tempo Real do Loop Infinito (Final ➔ Início 0:00):</div>` +
-        `<div><strong>Final da Última Cena:</strong> "${escapeHtmlAttr(endSnippet)}"</div>` +
-        `<div><strong>Início da Cena 1 (0:00):</strong> "${escapeHtmlAttr(startSnippet)}"</div>`;
     }
+    const updateLiveLoopBridge = updateLiveStructure;
 
     function renderScriptEditor(script) {
       document.getElementById('scriptPreviewBox').style.display = 'block';
@@ -690,14 +690,14 @@
             ${scenes.length > 2 ? `<button type="button" class="btn-secondary" style="padding:3px 8px; font-size:0.68rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="removeEditorScene(${idx})">🗑️ Excluir</button>` : ''}
           </div>
           <label style="display:block; font-size:0.7rem; color:${speakerBadgeColor}; font-weight:800; margin-bottom:3px;">${speakerTag}:</label>
-          <textarea class="scene-narration-input" rows="3" oninput="updateLiveLoopBridge()" style="width:100%; background:#07080d; color:#fff; border:1px solid ${isAntonio ? 'rgba(0,240,255,0.35)' : 'rgba(255,45,85,0.35)'}; border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
+          <textarea class="scene-narration-input" rows="3" oninput="updateLiveStructure()" style="width:100%; background:#07080d; color:#fff; border:1px solid ${isAntonio ? 'rgba(0,240,255,0.35)' : 'rgba(255,45,85,0.35)'}; border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
           <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">📸 Busca da Foto Real (Wikipédia / Wikimedia):</label>
           <input type="text" class="scene-photo-input" value="${escapeHtmlAttr(s.imageQuery || script.sourceTopic || '')}" style="width:100%; background:#07080d; color:#b8eaff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:7px; font-size:0.76rem;" />
         </div>
       `;
       }).join('');
 
-      updateLiveLoopBridge();
+      updateLiveStructure();
     }
 
     function syncCurrentScriptFromInputs() {
@@ -735,7 +735,7 @@
         caption: `${cleanCoverTitle}\n\n${description}\n\n${hashtags}`,
         scenes: updatedScenes
       };
-      updateLiveLoopBridge();
+      updateLiveStructure();
       return currentPreviewScript;
     }
 
@@ -834,12 +834,12 @@
             'Sincronizando 14 fotos reais HD da Web em lote único...',
             'Gravando Dueto Podcast: Thalita 👩 + Antônio 👨 (WordBoundary)...',
             'Renderizando Cinema 9:16 + Badge Podcast Dueto + Karaokê 3 Cores...',
-            'Mixando Sound Design + Voz Shure SM7B + Loop Infinito 🔁...'
+            'Mixando Sound Design + Voz Shure SM7B + Transições Pro 🎬...'
           ] : [
             'Baixando 14 fotos reais verificadas (Shot A + Shot B) em lote único...',
             'Gravando voz Neural com curva de emoção por cena (WordBoundary)...',
             'Renderizando Cinema Full-Screen 9:16 + Karaokê 3 Cores + Dados Reais...',
-            'Mixando Sound Design 14 Cortes (Sub-Bass + Whooshes) + Loop Infinito 🔁...'
+            'Mixando Sound Design 14 Cortes (Sub-Bass + Whooshes) + Fade Final 🎬...'
           ];
           updateProgress(simPct, msgs[Math.min(3, Math.floor((simPct - 14) / 20))]);
         }
@@ -1138,16 +1138,18 @@
       const pinnedEl = document.getElementById('videoPinnedDisplay');
       if (pinnedEl) pinnedEl.textContent = seo.pinnedComment;
 
-      document.getElementById('videoDurationBadge').textContent = (video.duration || 65) + 's • 9:16 HD • 🔁 Loop';
+      document.getElementById('videoDurationBadge').textContent = (video.duration || 65) + 's • 9:16 HD • 🎬 Edição Cinema 3.0';
 
-      const lb = video.loopBridge || {
-        endText: 'Mas o motivo mais chocante de todos é que...',
-        startText: `...quase ninguém no mundo percebe o verdadeiro segredo por trás de ${seo.title}!`
-      };
-      document.getElementById('videoLoopBridgeDisplay').innerHTML =
-        `<div style="margin-bottom:4px;"><strong>Final do Vídeo:</strong> <span style="color:#00f0ff;">"${lb.endText}"</span></div>` +
-        `<div style="margin-bottom:4px;"><strong>Início (0:00):</strong> <span style="color:#00e676;">"${lb.startText}"</span></div>` +
-        `<div style="font-size:0.72rem; color:#a8d5ba;">✨ Silêncio morto removido (corte acústico de 60ms) + Mesma foto da Cena 1 nos segundos finais!</div>`;
+      const structBox = document.getElementById('videoStructureDisplay') || document.getElementById('videoLoopBridgeDisplay');
+      if (structBox) {
+        const scenes = Array.isArray(video.scenes) ? video.scenes : [];
+        const hookText = (scenes[0] && scenes[0].narration) || 'Abertura direta e eletrizante com gancho magnético!';
+        const outroText = (scenes.length > 0 && scenes[scenes.length - 1].narration) || 'Conclusão clara com chamada para ação!';
+        structBox.innerHTML =
+          `<div style="margin-bottom:4px;"><strong>🪝 Gancho Inicial (0:00):</strong> <span style="color:#00f0ff;">"${escapeHtmlAttr(hookText.slice(0, 110))}..."</span></div>` +
+          `<div style="margin-bottom:4px;"><strong>📢 Conclusão & CTA:</strong> <span style="color:#00ff88;">"${escapeHtmlAttr(outroText.slice(-110))}"</span></div>` +
+          `<div style="font-size:0.72rem; color:#8fffd2;">✨ Ângulo dinâmico (Plano Médio ➔ Macro Punch-in) + Fade final de áudio + 100% Nítido!</div>`;
+      }
 
       card.scrollIntoView({ behavior: 'smooth' });
     }
