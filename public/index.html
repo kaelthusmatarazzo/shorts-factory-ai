@@ -802,7 +802,13 @@
       try {
         return JSON.parse(txt);
       } catch (e) {
-        throw new Error(`O servidor da nuvem demorou mais de 60s ou retornou erro (${res.status}). Atualize o repositório no GitHub para ativar o Modo Paralelo Ultra-Rápido (18s)!`);
+        if (res.status === 504 || res.status === 408) {
+          throw new Error(`O servidor excedeu o tempo limite (${res.status}). O Modo Turbo Paralelo foi ativado para gerar em menos de 15s.`);
+        }
+        if (res.status === 502 || res.status === 503) {
+          throw new Error(`O servidor da nuvem está acordando ou reiniciando (${res.status}). Aguarde alguns segundos e clique novamente.`);
+        }
+        throw new Error(`Erro no servidor (${res.status}): ${txt.slice(0, 100)}`);
       }
     }
 
