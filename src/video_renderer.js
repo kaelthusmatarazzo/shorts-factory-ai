@@ -647,7 +647,7 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Clean 720x1280 HD Frame Renderer: Rock-Solid Zero-Tremor Photos + 0.08s Film Flash + 3-Color Semantic Karaoke Subtitles ONLY!
+// Clean 720x1280 HD Frame Renderer: Rock-Solid Zero-Tremor Photos + 0.08s Film Flash + 3-Color Semantic Karaoke Subtitles + Podcast Badge!
 // Pre-baked 720x1280 buffer composite runs in < 25ms per frame (under 2.2s for the entire video!), zero shaking, zero Vercel timeouts!
 async function renderCaptionedFrame({
   photoBuffer,
@@ -656,6 +656,7 @@ async function renderCaptionedFrame({
   activeWordIdx = 0,
   palette = null,
   progressRatio,
+  speakerInfo = null,
   outputFramePath
 }) {
   const pal = palette || getAtmospherePalette('cosmic');
@@ -684,7 +685,21 @@ async function renderCaptionedFrame({
     ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF" fill-opacity="0.22"/>`
     : '';
 
-  // Clean HUD SVG: Dark Vignette Gradient + Film Flash + 3-Color Karaoke Subtitles + Progress Bar ONLY!
+  // Host Indicator Badge for Duet Podcast Mode (Glowing pill centered near top)
+  const speakerBadgeSvg = (speakerInfo && speakerInfo.name) ? `
+    <g opacity="0.96">
+      <defs>
+        <filter id="badgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="${speakerInfo.color}" flood-opacity="0.45"/>
+        </filter>
+      </defs>
+      <rect x="235" y="60" width="250" height="40" rx="20" fill="#080a14" fill-opacity="0.88" stroke="${speakerInfo.color}" stroke-width="2" filter="url(#badgeGlow)"/>
+      <text x="360" y="86" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="15" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">
+        ${speakerInfo.emoji} ${speakerInfo.name.toUpperCase()} 🎙️
+      </text>
+    </g>` : '';
+
+  // Clean HUD SVG: Dark Vignette Gradient + Film Flash + 3-Color Karaoke Subtitles + Podcast Host Badge + Progress Bar ONLY!
   const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
@@ -695,6 +710,7 @@ async function renderCaptionedFrame({
     </defs>
     <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
     ${flashOverlayRect}
+    ${speakerBadgeSvg}
     <g>
       ${subtitleLinesSvg}
     </g>
@@ -725,31 +741,39 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   delete require.cache[require.resolve('./tts_and_audio')];
   const { synthesizeSpeechWithTimings, generateBackgroundMusicWav: genBgm } = require('./tts_and_audio');
 
-  const voiceName = options.voice || 'pt-BR-ThalitaMultilingualNeural';
+  const voiceName = options.voice || 'duet-podcast';
   const isDuetPodcast = (voiceName === 'duet-podcast');
   const scenes = scriptData.scenes || [];
   const colorTheme = scriptData.colorTheme || 'cosmic';
   const palette = getAtmospherePalette(colorTheme);
 
-  onProgress(15, 'Studio 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
+  onProgress(15, isDuetPodcast
+    ? 'Dueto Podcast: Gravando Thalita 👩 + Antônio 👨 + Buscando 14 Fotos Web HD...'
+    : 'Studio 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Run ALL Neural Voice Synthesis AND 14 Real 1:1 Web Photo Downloads AT THE EXACT SAME TIME!
-  const ttsJobsPromise = Promise.all(scenes.map(async (s, i) => {
-    const audioWavPath = path.join(tmpDir, `scene_${i}.wav`);
-    let sceneVoice = voiceName;
-    if (isDuetPodcast) {
-      const isLastLoop = (i === scenes.length - 1 && scenes.length >= 2);
-      sceneVoice = (i % 2 === 1 && !isLastLoop)
-        ? 'pt-BR-AntonioNeural'
-        : 'pt-BR-ThalitaMultilingualNeural';
+  // 1. Run Neural Voice Synthesis in batches of 2 (prevents cloud rate-limiting & eliminates 504 timeouts)
+  const ttsJobsPromise = (async () => {
+    const results = [];
+    for (let i = 0; i < scenes.length; i += 2) {
+      const batch = scenes.slice(i, i + 2);
+      const batchResults = await Promise.all(batch.map(async (s, bIdx) => {
+        const sceneIdx = i + bIdx;
+        const audioWavPath = path.join(tmpDir, `scene_${sceneIdx}.wav`);
+        let sceneVoice = voiceName;
+        if (isDuetPodcast) {
+          sceneVoice = s.voice || (sceneIdx % 2 === 1 ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural');
+        }
+        const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, sceneIdx);
+        return { audioWavPath, ttsResult, sceneVoice };
+      }));
+      results.push(...batchResults);
     }
-    const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, i);
-    return { audioWavPath, ttsResult };
-  }));
+    return results;
+  })();
 
   const photosPreparePromise = (async () => {
     const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
@@ -768,11 +792,21 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     photosPreparePromise
   ]);
 
-  onProgress(52, 'Sincronizando 14 Fotos Web HD + Efeitos por Palavra...');
+  onProgress(52, isDuetPodcast
+    ? 'Dueto Sincronizado: Mixando Vozes de Thalita 👩 & Antônio 👨...'
+    : 'Sincronizando 14 Fotos Web HD + Efeitos por Palavra...');
 
   for (let i = 0; i < scenes.length; i++) {
-    const { audioWavPath, ttsResult } = ttsResults[i];
+    const { audioWavPath, ttsResult, sceneVoice } = ttsResults[i];
     const { photoBufA, photoBufB } = scenePhotoBuffers[i];
+    const isAntonio = (sceneVoice && (sceneVoice.includes('Antonio') || sceneVoice.includes('Fabio'))) || (isDuetPodcast && (i % 2 === 1));
+    const speakerInfo = isDuetPodcast ? {
+      name: isAntonio ? 'Antônio' : 'Thalita',
+      emoji: isAntonio ? '👨' : '👩',
+      color: isAntonio ? '#00f0ff' : '#ff2d55',
+      role: isAntonio ? 'Comentarista' : 'Apresentadora'
+    } : null;
+
     sceneStartTimes.push(totalDuration);
     sceneAssets.push({
       index: i,
@@ -781,7 +815,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       photoBufA,
       photoBufB,
       duration: ttsResult.duration,
-      wordBoundaries: ttsResult.wordBoundaries
+      wordBoundaries: ttsResult.wordBoundaries,
+      speakerInfo
     });
     totalDuration += ttsResult.duration;
   }
@@ -847,6 +882,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
         activeWordIdx: timedChunks[c].activeWordIdx,
         palette,
         progressRatio,
+        speakerInfo: asset.speakerInfo,
         outputFramePath: framePath
       });
 
