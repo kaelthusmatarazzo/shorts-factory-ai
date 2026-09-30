@@ -7,56 +7,64 @@ const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 // Synthesize speech in PT-BR and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
 async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-ThalitaMultilingualNeural', sceneIndex = 0) {
   const rawMp3Path = outputWavPath.replace(/\.wav$/, '_raw.mp3');
-  const wordBoundaries = [];
+  let wordBoundaries = [];
   let generated = false;
+  let usedEmergencyGoogle = false;
 
-  // Dynamic Scene-Aware Documentary Prosody (Hook is faster/punchier; Climax scenes have deeper weight; Loop Bridge builds momentum)
+  // Scene-Aware Documentary Prosody for Natural Podcast Conversation
   const baseProsodyByVoice = {
     'pt-BR-ThalitaMultilingualNeural': [
-      { rate: '+11%', pitch: '+1Hz' }, // Scene 1: High-retention scroll-stopping Hook
+      { rate: '+10%', pitch: '+1Hz' }, // Scene 1: Scroll-stopping Hook
       { rate: '+7%', pitch: '-1Hz' },  // Scene 2: Engaging Setup
       { rate: '+7%', pitch: '-1Hz' },  // Scene 3: Deep Mechanism
-      { rate: '+5%', pitch: '-2Hz' },  // Scene 4: Dramatic Reveal / Extreme Numbers
-      { rate: '+6%', pitch: '-1Hz' },  // Scene 5: Historical Proof
+      { rate: '+6%', pitch: '-1Hz' },  // Scene 4: Dramatic Reveal / Extreme Numbers
+      { rate: '+7%', pitch: '-1Hz' },  // Scene 5: Historical Proof
       { rate: '+8%', pitch: '+0Hz' },  // Scene 6: Scientific Payoff
-      { rate: '+10%', pitch: '+1Hz' }  // Scene 7: Cliffhanger Loop Bridge -> 0:00
+      { rate: '+9%', pitch: '+1Hz' }   // Scene 7: Cliffhanger Loop Bridge -> 0:00
     ],
+    'pt-BR-AntonioNeural': [
+      { rate: '+8%', pitch: '-1Hz' },  // Scene 1 / 2: Natural curiosity / reaction
+      { rate: '+9%', pitch: '+0Hz' },  // Scene 3: Expressive counter-point
+      { rate: '+7%', pitch: '-1Hz' },  // Scene 4: Extreme numbers / astonishment
+      { rate: '+8%', pitch: '+0Hz' },  // Scene 5: Concrete evidence
+      { rate: '+8%', pitch: '+0Hz' },  // Scene 6: Call to action / opinion bait
+      { rate: '+9%', pitch: '+1Hz' }   // Scene 7: Bridge handoff
+    ],
+    'pt-BR-FabioNeural': [{ rate: '+8%', pitch: '-1Hz' }],
+    'pt-BR-FranciscaNeural': [{ rate: '+8%', pitch: '-1Hz' }],
     'en-US-AvaMultilingualNeural': [{ rate: '+7%', pitch: '+0Hz' }],
-    'en-US-EmmaMultilingualNeural': [{ rate: '+8%', pitch: '+0Hz' }],
-    'pt-BR-FranciscaNeural': [{ rate: '+8%', pitch: '-2Hz' }],
-    'pt-BR-AntonioNeural': [{ rate: '+7%', pitch: '-1Hz' }]
+    'en-US-EmmaMultilingualNeural': [{ rate: '+8%', pitch: '+0Hz' }]
   };
-  const voiceCurve = baseProsodyByVoice[voiceName] || baseProsodyByVoice['pt-BR-ThalitaMultilingualNeural'];
-  const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+7%', pitch: '-1Hz' };
 
-  try {
+  const isMale = (voiceName.includes('Antonio') || voiceName.includes('Fabio'));
+  const fallbackNeuralVoice = isMale ? 'pt-BR-FabioNeural' : 'pt-BR-FranciscaNeural';
+
+  async function tryEdgeSynthesis(targetVoice) {
     const tts = new MsEdgeTTS();
     await Promise.race([
-      tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
+      tts.setMetadata(targetVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
         wordBoundaryEnabled: true
       }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 6000))
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 7000))
     ]);
 
+    const voiceCurve = baseProsodyByVoice[targetVoice] || (isMale ? baseProsodyByVoice['pt-BR-AntonioNeural'] : baseProsodyByVoice['pt-BR-ThalitaMultilingualNeural']);
+    const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+7%', pitch: '-1Hz' };
     const { audioStream, metadataStream } = tts.toStream(text, prosodyOptions);
+    const localWb = [];
 
     if (metadataStream) {
       metadataStream.on('data', data => {
         try {
-          const str = data.toString();
-          const parsed = JSON.parse(str);
+          const parsed = JSON.parse(data.toString());
           if (parsed && Array.isArray(parsed.Metadata)) {
             for (const item of parsed.Metadata) {
               if (item.Type === 'WordBoundary' && item.Data) {
                 const wordText = item.Data.text?.Text || '';
-                const offsetSec = (item.Data.Offset || 0) / 10000000; // 100ns ticks -> seconds
+                const offsetSec = (item.Data.Offset || 0) / 10000000;
                 const durationSec = (item.Data.Duration || 0) / 10000000;
                 if (wordText) {
-                  wordBoundaries.push({
-                    word: wordText,
-                    offsetSec,
-                    durationSec
-                  });
+                  localWb.push({ word: wordText, offsetSec, durationSec });
                 }
               }
             }
@@ -68,42 +76,57 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
     await new Promise((resolve, reject) => {
       let settled = false;
       const chunks = [];
-      const timeout = setTimeout(() => {
+      const timer = setTimeout(() => {
         if (settled) return;
         settled = true;
-        reject(new Error('Edge TTS timeout'));
-      }, 8500);
+        reject(new Error('Edge TTS stream timeout'));
+      }, 9500);
+
       audioStream.on('data', chunk => {
         if (!settled) chunks.push(chunk);
       });
       audioStream.on('end', () => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        clearTimeout(timer);
         const buf = Buffer.concat(chunks);
         if (buf.length > 500 && fs.existsSync(path.dirname(rawMp3Path))) {
           fs.writeFileSync(rawMp3Path, buf);
           resolve();
         } else {
-          reject(new Error('Empty audio buffer from Edge TTS'));
+          reject(new Error('Buffer de áudio vazio'));
         }
       });
       audioStream.on('error', err => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        clearTimeout(timer);
         reject(err);
       });
     });
 
-    if (fs.existsSync(rawMp3Path) && fs.statSync(rawMp3Path).size > 500) {
-      generated = true;
-    }
-  } catch (err) {
-    console.log(`Edge TTS fallback triggered (${err.message}), using Google TTS PT-BR...`);
+    return localWb;
   }
 
-  if (!generated) {
+  // 1. Primary Neural Voice Attempt
+  try {
+    wordBoundaries = await tryEdgeSynthesis(voiceName);
+    generated = true;
+    console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Edge TTS primário OK (${voiceName}) - ${wordBoundaries.length} palavras`);
+  } catch (err1) {
+    console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Primário ${voiceName} falhou (${err1.message}). Tentando fallback neural ${fallbackNeuralVoice}...`);
+    // 2. Secondary Neural Voice Fallback (preserves male/female duet integrity!)
+    try {
+      wordBoundaries = await tryEdgeSynthesis(fallbackNeuralVoice);
+      generated = true;
+      console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Fallback neural OK (${fallbackNeuralVoice}) - ${wordBoundaries.length} palavras`);
+    } catch (err2) {
+      console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Fallback neural também falhou (${err2.message}).`);
+    }
+  }
+
+  // 3. Emergency Fallback: Google TTS (only if both Microsoft Neural voices were unreachable)
+  if (!generated || !fs.existsSync(rawMp3Path) || fs.statSync(rawMp3Path).size <= 500) {
     try {
       const encoded = encodeURIComponent(text.slice(0, 200));
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encoded}`;
@@ -112,8 +135,21 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
         const arrayBuf = await res.arrayBuffer();
         fs.writeFileSync(rawMp3Path, Buffer.from(arrayBuf));
         generated = true;
+        usedEmergencyGoogle = true;
+        console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Google TTS emergencial salvo`);
+
+        // Create synthetic word boundaries so karaoke subtitles still highlight word by word
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        const approxDur = Math.max(2.0, words.length * 0.38);
+        let currOffset = 0;
+        wordBoundaries = words.map(w => {
+          const wDur = Math.max(0.18, (w.length / 5) * 0.32);
+          const item = { word: w, offsetSec: currOffset, durationSec: wDur };
+          currOffset += wDur + 0.05;
+          return item;
+        });
       }
-    } catch (err2) {}
+    } catch (err3) {}
   }
 
   const { execFile } = require('child_process');
@@ -121,9 +157,14 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
   const execFileAsync = promisify(execFile);
 
   if (generated) {
+    // If emergency fallback was used for a male voice, apply pitch shift so it sounds masculine
+    const audioFilters = usedEmergencyGoogle && isMale
+      ? 'asetrate=44100*0.88,atempo=1.14,equalizer=f=185:t=q:w=1.2:g=2.2'
+      : 'equalizer=f=185:t=q:w=1.2:g=2.2,equalizer=f=3400:t=q:w=1.8:g=-2.2,equalizer=f=10500:t=q:w=1.0:g=2.4';
+
     await execFileAsync(ffmpegPath, [
       '-y', '-i', rawMp3Path,
-      '-af', 'equalizer=f=185:t=q:w=1.2:g=2.2,equalizer=f=3400:t=q:w=1.8:g=-2.2,equalizer=f=10500:t=q:w=1.0:g=2.4',
+      '-af', audioFilters,
       '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le',
       outputWavPath
     ]);
