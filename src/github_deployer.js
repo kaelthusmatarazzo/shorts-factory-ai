@@ -13,7 +13,9 @@ const FILES_TO_PUSH = [
   'src/tts_and_audio.js',
   'src/video_renderer.js',
   'src/publisher.js',
-  'src/github_deployer.js'
+  'src/github_deployer.js',
+  'src/telegram_storage.js',
+  'src/r2_storage.js'
 ];
 
 async function deployProjectToGitHub(githubToken, repoName = 'shorts-factory-ai') {
