@@ -15,7 +15,9 @@ const FILES_TO_PUSH = [
   'src/publisher.js',
   'src/github_deployer.js',
   'src/telegram_storage.js',
-  'src/r2_storage.js'
+  'src/r2_storage.js',
+  'data/telegram_config.json',
+  'data/history.json'
 ];
 
 async function deployProjectToGitHub(githubToken, repoName = 'shorts-factory-ai') {
