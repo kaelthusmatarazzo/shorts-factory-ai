@@ -350,6 +350,28 @@ if (!process.env.VERCEL) {
     if (!process.env.RENDER && !process.env.PORT) {
       startCloudflareTunnel();
     }
+
+    // Auto-restore database from Telegram if local history is empty
+    (async () => {
+      try {
+        const { fetchHistoryDatabaseFromTelegram } = require('./src/telegram_storage');
+        const { loadHistory: loadHist } = require('./src/generator');
+        const currentHist = loadHist();
+        if ((!currentHist.videos || currentHist.videos.length === 0) && (!currentHist.usedTopics || currentHist.usedTopics.length === 0)) {
+          const remoteDb = await fetchHistoryDatabaseFromTelegram();
+          if (remoteDb) {
+            const historyPath = path.join(__dirname, 'data', 'history.json');
+            const dir = path.dirname(historyPath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(historyPath, JSON.stringify(remoteDb, null, 2), 'utf8');
+            delete require.cache[require.resolve('./src/generator')];
+            console.log(`✅ [Startup] Base de dados restaurada automaticamente do Telegram (${remoteDb.usedTopics?.length || 0} temas)!`);
+          }
+        }
+      } catch (e) {
+        console.warn('[Startup] Não foi possível verificar base remota do Telegram:', e.message);
+      }
+    })();
   });
 }
 
