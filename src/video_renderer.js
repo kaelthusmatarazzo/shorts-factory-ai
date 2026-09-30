@@ -224,9 +224,9 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const seenUrls = new Set();
 
   const seenIds = new Set();
-  const addWebPhotoCandidate = (cdnUrl, murl = '', title = '') => {
+  const addWebPhotoCandidate = (cdnUrl, murl = '') => {
     if (!cdnUrl) return;
-    const checkStr = `${murl} ${title}`.toLowerCase();
+    const checkStr = String(murl || '').toLowerCase();
     // Block YouTube clickbait thumbnails, Pinterest, memes, slides, academic figures, maps, charts, and logos
     if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
 
