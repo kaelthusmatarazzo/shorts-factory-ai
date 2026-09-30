@@ -909,7 +909,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
     '-filter_complex',
-    `[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
+    `[1:a]highpass=f=65,acompressor=threshold=-19dB:ratio=2.0:attack=18:release=140:makeup=1.1,volume=1.06[voice];[2:a]lowpass=f=3500,volume=0.15[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
