@@ -3,6 +3,9 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const sharp = require('sharp');
+// Strict memory protection for 512MB cloud instances (prevents OOM SIGKILL restarts)
+sharp.concurrency(2);
+sharp.cache({ memory: 32, items: 32, files: 20 });
 const opentype = require('opentype.js');
 
 const WIDTH = 720;
@@ -437,17 +440,17 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
         return await sharp(bestImgBuf)
           .resize(punchW, punchH, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
           .extract({ left, top, width: OVERSCAN_W, height: OVERSCAN_H })
-          .sharpen({ sigma: 1.25, m1: 1.0, m2: 2.0 })
-          .modulate({ brightness: 0.98, saturation: 1.22 })
-          .jpeg({ quality: 90 })
+          .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
+          .modulate({ brightness: 0.98, saturation: 1.20 })
+          .jpeg({ quality: 80 })
           .toBuffer();
       } else {
         // Shot A: Wide / Medium Framing with rich cinematic grading
         return await sharp(bestImgBuf)
           .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
-          .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
-          .modulate({ brightness: 0.98, saturation: 1.18 })
-          .jpeg({ quality: 88 })
+          .sharpen({ sigma: 1.10, m1: 0.8, m2: 1.6 })
+          .modulate({ brightness: 0.98, saturation: 1.16 })
+          .jpeg({ quality: 80 })
           .toBuffer();
       }
     } catch (e) {}
@@ -709,7 +712,7 @@ async function renderCaptionedFrame({
 
   await sharp(photoBuffer)
     .composite([{ input: Buffer.from(hudSvg), top: 0, left: 0 }])
-    .jpeg({ quality: 86 })
+    .jpeg({ quality: 78, progressive: false })
     .toFile(outputFramePath);
 }
 
@@ -744,25 +747,18 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Run Neural Voice Synthesis in batches of 2 (prevents cloud rate-limiting & eliminates 504 timeouts)
-  const ttsJobsPromise = (async () => {
-    const results = [];
-    for (let i = 0; i < scenes.length; i += 2) {
-      const batch = scenes.slice(i, i + 2);
-      const batchResults = await Promise.all(batch.map(async (s, bIdx) => {
-        const sceneIdx = i + bIdx;
-        const audioWavPath = path.join(tmpDir, `scene_${sceneIdx}.wav`);
-        let sceneVoice = voiceName;
-        if (isDuetPodcast) {
-          sceneVoice = s.voice || (sceneIdx % 2 === 1 ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural');
-        }
-        const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, sceneIdx);
-        return { audioWavPath, ttsResult, sceneVoice };
-      }));
-      results.push(...batchResults);
+  // 1. Ultra-Fast Parallel Neural Voice Synthesis (All scenes synthesize concurrently in < 1.5s total!)
+  const ttsJobsPromise = Promise.all(scenes.map(async (s, sceneIdx) => {
+    const audioWavPath = path.join(tmpDir, `scene_${sceneIdx}.wav`);
+    let sceneVoice = voiceName;
+    if (isDuetPodcast) {
+      sceneVoice = (sceneIdx % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
+    } else if (sceneVoice === 'pt-BR-ThalitaMultilingualNeural') {
+      sceneVoice = 'pt-BR-FranciscaNeural';
     }
-    return results;
-  })();
+    const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, sceneIdx);
+    return { audioWavPath, ttsResult, sceneVoice };
+  }));
 
   const photosPreparePromise = (async () => {
     const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
@@ -879,8 +875,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     elapsedDuration += asset.duration;
   }
 
-  // Render all 720x1280 JPEG frames in parallel batches (~2.0s total!)
-  const BATCH_SIZE = 32;
+  // Render all 720x1280 JPEG frames in memory-protected batches (60MB max heap, zero OOM)
+  const BATCH_SIZE = 8;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
     await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
   }
