@@ -66,13 +66,22 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
     }
 
     await new Promise((resolve, reject) => {
+      let settled = false;
       const chunks = [];
-      const timeout = setTimeout(() => reject(new Error('Edge TTS timeout')), 4200);
-      audioStream.on('data', chunk => chunks.push(chunk));
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Edge TTS timeout'));
+      }, 1900);
+      audioStream.on('data', chunk => {
+        if (!settled) chunks.push(chunk);
+      });
       audioStream.on('end', () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
         const buf = Buffer.concat(chunks);
-        if (buf.length > 500) {
+        if (buf.length > 500 && fs.existsSync(path.dirname(rawMp3Path))) {
           fs.writeFileSync(rawMp3Path, buf);
           resolve();
         } else {
@@ -80,6 +89,8 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
         }
       });
       audioStream.on('error', err => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
         reject(err);
       });
