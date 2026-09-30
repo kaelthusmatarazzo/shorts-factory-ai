@@ -189,12 +189,7 @@ function normalizeMetadata(item) {
   item.tiktokPostText = `${cleanTitle}\n\n${cleanDescBody}\n\n${item.hashtags}`;
   item.caption = item.tiktokPostText;
 
-  if (!item.loopBridge) {
-    item.loopBridge = {
-      endText: 'Mas o motivo mais chocante de todos é que...',
-      startText: `...quase ninguém no mundo percebe o verdadeiro segredo oculto por trás de ${cleanTitle}!`
-    };
-  }
+
 
   try {
     const { detectTopicColorTheme, generatePinnedCommentForTopic } = require('./curated_facts_bank');
@@ -485,16 +480,14 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     if (art && art.wikiImage) wikiImage = art.wikiImage;
   } catch (e) {}
 
-  const loopBridge = {
-    endText: curated.loopEnd || 'Mas o detalhe mais impressionante dessa história fica claro quando você descobre que...',
-    startText: curated.loopStart || `...quase ninguém conhece o verdadeiro segredo por trás de ${cleanTopic}!`
-  };
+  const rawHook = (curated.loopStart || `Você sabia que existe um segredo inacreditável por trás de ${cleanTopic}?`).replace(/^\.\.\.\s*/, '');
+  const cleanHook = rawHook.charAt(0).toUpperCase() + rawHook.slice(1);
 
   const builtScenes = curated.scenes.map((sc, idx) => {
     const isAntonio = (idx % 2 === 1);
     let narrationText = sc.narration;
     if (idx === 0) {
-      narrationText = `${loopBridge.startText} ${sc.narration}`;
+      narrationText = `${cleanHook} ${sc.narration}`;
     } else if (isAntonio && idx === 1) {
       narrationText = `Sério? Mas como isso funciona de verdade? ${sc.narration}`;
     } else if (isAntonio && idx === 3) {
@@ -514,14 +507,15 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     };
   });
 
+  const outroText = `Fatos reais e impressionantes como esse sobre ${cleanTopic} mostram como o nosso mundo é incrível! Se você curtiu esse vídeo, já segue o canal, deixa o like e comente sua opinião aqui embaixo. Até a próxima!`;
   builtScenes.push({
-    narration: `Se você curte descobrir fatos curiosos reais e cheios de informação como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${loopBridge.endText}`,
+    narration: outroText,
     speaker: 'Thalita',
     voice: 'pt-BR-ThalitaMultilingualNeural',
     imageQuery: curated.scenes[0]?.imageQuery || cleanTopic,
     fallbackThemeQuery: curated.scenes[0]?.fallbackThemeQuery || cleanTopic,
-    sceneLabel: `7/7 • ${cleanTopic}`,
-    isLoopBridgeScene: true
+    sceneLabel: `7/7 • Conclusão & CTA`,
+    isOutroScene: true
   });
 
   const finalScenes = durationMode === 'short'
@@ -541,7 +535,6 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     description,
     hashtags,
     caption: `${description}\n\n${hashtags}`,
-    loopBridge,
     badge: 'FATOS CURIOSOS',
     musicMood: 'dark',
     colorTheme: curated.colorTheme || undefined,
@@ -632,25 +625,23 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   const description = `${f1}\n\n${f2}\n\nAssista até o final para conhecer os fatos reais sobre ${cleanTopic}! 😱 Você já sabia disso? Comente aqui embaixo! 👇`;
   const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #documentario #tiktokbrasil #fyp #viral #shorts`;
 
-  const loopBridges = [
-    {
-      endText: 'Mas o detalhe mais impressionante dessa história fica claro quando você descobre que...',
-      startText: `...muita gente já ouviu falar em ${cleanTopic}, mas quase ninguém conhece os números e fatos reais por trás disso!`
-    },
-    {
-      endText: 'E tudo isso começa a fazer sentido no exato momento em que você vê que...',
-      startText: `...a verdadeira história científica de ${cleanTopic} guarda fatos reais que surpreendem até os especialistas!`
-    },
-    {
-      endText: 'Só que o dado mais curioso sobre tudo isso aparece logo quando descobrimos que...',
-      startText: `...por trás de ${cleanTopic} existem fatos concretos e comprovados que parecem coisa de filme!`
-    }
+  const hookOpeners = [
+    `Você sabia que existe um mistério inacreditável por trás de ${cleanTopic}?`,
+    `A verdadeira história científica de ${cleanTopic} guarda fatos que surpreendem até os especialistas!`,
+    `Quase ninguém conhece os detalhes reais sobre ${cleanTopic}, mas os registros comprovam algo impressionante!`
   ];
-  const chosenLoopBridge = loopBridges[Math.floor(Math.random() * loopBridges.length)];
+  const chosenHook = hookOpeners[Math.floor(Math.random() * hookOpeners.length)];
+
+  const outroClosers = [
+    `Essa descoberta sobre ${cleanTopic} mostra como o nosso mundo ainda guarda mistérios reais. Se você curtiu esse vídeo, já segue o canal, deixa o like e comente o que você achou!`,
+    `Fatos reais e curiosos como esse sobre ${cleanTopic} mudam nossa visão do mundo! Já segue o perfil para não perder os próximos vídeos e deixe sua opinião aqui embaixo!`,
+    `Incrível como ${cleanTopic} ainda impressiona a ciência moderna. Se você curtiu esse conteúdo, já segue o perfil e compartilha com um amigo curioso!`
+  ];
+  const chosenOutro = outroClosers[Math.floor(Math.random() * outroClosers.length)];
 
   const allScenes = [
     {
-      narration: `${chosenLoopBridge.startText} ${f1}`,
+      narration: `${chosenHook} ${f1}`,
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
@@ -700,13 +691,13 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       isCommentBaitScene: true
     },
     {
-      narration: `Se você gosta de vídeos direto ao ponto com fatos reais como esse sobre ${cleanTopic}, já segue o perfil para não perder o próximo! ${chosenLoopBridge.endText}`,
+      narration: chosenOutro,
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} photo`,
-      sceneLabel: `7/7 • ${cleanTopic}`,
-      isLoopBridgeScene: true
+      sceneLabel: `7/7 • Conclusão & CTA`,
+      isOutroScene: true
     }
   ];
 
@@ -722,7 +713,6 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
     description,
     hashtags,
     caption: `${description}\n\n${hashtags}`,
-    loopBridge: chosenLoopBridge,
     badge: 'FATOS CURIOSOS',
     musicMood: 'dark',
     themeColor: '#00f0ff',
