@@ -137,6 +137,39 @@ function normalizeMetadata(item) {
   };
 
   const cleanTopicShort = (item.sourceTopic || cleanTitle).replace(/\s*\([^)]*\)/g, '').replace(/[\u{1F300}-\u{1FAFF}]/gu, '').trim();
+
+  // UPGRADE #4 & #1: Curiosity Escalation Ladder (Open Loops at ~12s & ~24s) + Scene-Specific 1:1 Visual Keywords
+  if (Array.isArray(item.scenes)) {
+    const extractVisualActionKeywords = (text) => {
+      const low = String(text || '').toLowerCase();
+      const extraTerms = [];
+      if (/broca|perfur|poço|buraco|cratera|escava/i.test(low)) extraTerms.push('drilling rig deep crater');
+      if (/calor|graus|°c|derret|fogo|lava|ferv|magma|quente/i.test(low)) extraTerms.push('molten rock extreme heat glow');
+      if (/tampa|aço|ferro|solda|abandon|ruína|fechad/i.test(low)) extraTerms.push('rusted steel cap abandoned structure');
+      if (/cientist|laborat|amostra|microsc|sensor|equipamento|estudo/i.test(low)) extraTerms.push('scientific laboratory rock sample close up');
+      if (/oceano|mar|água|abismo|fundo|submarin|pressão|fossa/i.test(low)) extraTerms.push('deep ocean abyss underwater');
+      if (/espaço|planeta|lua|sol|órbita|nasa|telescópio|galáxia|estrela/i.test(low)) extraTerms.push('nasa space telescope planet');
+      if (/floresta|árvore|raiz|planta|selva|animal|cobra|veneno/i.test(low)) extraTerms.push('nature macro photography wildlife');
+      const ptWords = low
+        .replace(/[^a-záàâãéêíóôõúç\s]/gi, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 6 && !/porque|quando|depois|durante|apenas|também|estava|foram|contra|dentro|grande|muito|sempre|parece|existe|mundo|todos|sobre|Olha|além|disso/i.test(w))
+        .slice(0, 2);
+      return [...extraTerms.slice(0, 1), ...ptWords].join(' ').trim();
+    };
+
+    item.scenes.forEach((sc, idx) => {
+      sc.sceneVisualKeywords = extractVisualActionKeywords(sc.narration);
+      // Inject Curiosity Open-Loop Bridges at Scene 2 (~12s) and Scene 4 (~24s) so viewers cannot swipe before Scene 6
+      if (idx === 1 && sc.narration && !/mas o |só que |até que /i.test(sc.narration.slice(-45))) {
+        sc.narration = sc.narration.replace(/\.*$/, '.') + ' Mas o detalhe mais chocante vem agora:';
+      }
+      if (idx === 3 && sc.narration && !/mas o |só que |até que /i.test(sc.narration.slice(-45))) {
+        sc.narration = sc.narration.replace(/\.*$/, '.') + ' Até que descobriram algo ainda mais extremo:';
+      }
+    });
+  }
+
   const allSceneText = Array.isArray(item.scenes) ? item.scenes.map(s => s.narration || '').join(' ') : '';
   const numSnippet = extractBestShockNumber(allSceneText);
 
