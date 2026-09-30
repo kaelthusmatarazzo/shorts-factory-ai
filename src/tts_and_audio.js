@@ -232,7 +232,7 @@ function injectMysteryPingSFX(left, right, pingSample, sampleRate, freq = 1108.7
   }
 }
 
-function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', sceneStartTimes = [], midCutTimes = []) {
+function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', sceneStartTimes = [], midCutTimes = [], wordTriggerEvents = []) {
   const sampleRate = 44100;
   const totalSamples = Math.floor((durationSec + 0.5) * sampleRate);
   const left = new Float32Array(totalSamples);
@@ -316,6 +316,58 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
     }
   };
 
+  // UPGRADE #5A: Stereo Mechanical Clock Tick-Tock during Climax Scenes (Scene 3 & Scene 4)
+  if (sceneStartTimes.length >= 4) {
+    const tickStartSec = sceneStartTimes[2];
+    const tickEndSec = sceneStartTimes[4] || (tickStartSec + 12.0);
+    const tickInterval = 0.25; // 4 ticks per second (240 BPM urgency)
+    let tickIdx = 0;
+    for (let tSec = tickStartSec; tSec < tickEndSec; tSec += tickInterval) {
+      const tickSample = Math.floor(tSec * sampleRate);
+      const clickDurSamples = Math.floor(0.018 * sampleRate);
+      const isTick = (tickIdx % 2 === 0);
+      const tickFreq = isTick ? 2650 : 1950;
+      const panL = isTick ? 0.85 : 0.35;
+      const panR = isTick ? 0.35 : 0.85;
+      for (let k = 0; k < clickDurSamples && (tickSample + k) < totalSamples; k++) {
+        const tau = k / sampleRate;
+        const env = Math.exp(-tau * 260);
+        const clickVal = (Math.sin(2 * Math.PI * tickFreq * tau) + (Math.random() * 2 - 1) * 0.4) * env * 0.20;
+        left[tickSample + k] += clickVal * panL;
+        right[tickSample + k] += clickVal * panR;
+      }
+      tickIdx++;
+    }
+  }
+
+  // UPGRADE #5B: Word-Triggered Suspense Risers (before numbers) & Sub-Bass Drops (on shock/danger words)
+  const injectSuspenseRiserSFX = (targetWordSample) => {
+    const riserDur = 0.55;
+    const riserSamples = Math.floor(riserDur * sampleRate);
+    const startIdx = Math.max(0, targetWordSample - riserSamples);
+    let phase = 0;
+    for (let k = 0; k < riserSamples && (startIdx + k) < totalSamples; k++) {
+      const progress = k / riserSamples;
+      const freq = 190 + 780 * (progress * progress);
+      phase += (2 * Math.PI * freq) / sampleRate;
+      const env = Math.pow(progress, 1.8) * (1 - Math.pow(progress, 12));
+      const val = Math.sin(phase) * env * 0.19;
+      left[startIdx + k] += val * (1 - progress * 0.4);
+      right[startIdx + k] += val * (0.6 + progress * 0.4);
+    }
+  };
+
+  for (const ev of wordTriggerEvents) {
+    const evSample = Math.floor((ev.timeSec || 0) * sampleRate);
+    if (evSample <= sampleRate * 0.3 || evSample >= totalSamples - sampleRate * 0.3) continue;
+    if (ev.type === 'gold_number') {
+      injectSuspenseRiserSFX(evSample);
+      injectBassBoomSFX(left, right, evSample, sampleRate, 0.48);
+    } else if (ev.type === 'danger_shock') {
+      injectBassBoomSFX(left, right, evSample, sampleRate, 0.52);
+    }
+  }
+
   for (let idx = 0; idx < sceneStartTimes.length; idx++) {
     const startSec = sceneStartTimes[idx];
     const samplePos = Math.floor(startSec * sampleRate);
@@ -335,11 +387,11 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
     }
   }
 
-  // Mid-Scene 3.5s Visual Cut SFX (Sub-Cut A -> Sub-Cut B whoosh + subtle low punch)
+  // Mid-Scene 3.5s Visual Cut SFX (Sub-Cut A -> Sub-Cut B whoosh + shutter + subtle low punch)
   for (const midSec of midCutTimes) {
     const midSample = Math.floor(midSec * sampleRate);
     if (midSample > sampleRate && midSample < totalSamples - sampleRate) {
-      injectBassBoomSFX(left, right, midSample, sampleRate, 0.38);
+      injectWhooshAndShutterSFX(left, right, midSample, sampleRate);
       injectMysteryPingSFX(left, right, midSample, sampleRate, freqs[2] * 3);
     }
   }
