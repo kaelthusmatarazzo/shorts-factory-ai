@@ -386,8 +386,11 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
 }
 
 // UPGRADE #3: Downloads a real web photo, validates via Computer Vision Quality Gate, and creates an 800x1422 Master Overscan Buffer for smooth monotonic Ken Burns zoom!
-const OVERSCAN_W = 800;
-const OVERSCAN_H = 1422;
+const OVERSCAN_W = 960;
+const OVERSCAN_H = 1706;
+const VIDEO_FPS = 20;
+const SUB_STRIP_Y = 790;
+const SUB_STRIP_H = HEIGHT - SUB_STRIP_Y; // 490px bottom overlay strip
 
 async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
   const pal = getAtmospherePalette(colorTheme);
@@ -444,6 +447,18 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
 function buildExactTimedChunks(narrationText, wordBoundaries, sceneDurationSec) {
   const rawTokens = narrationText.trim().split(/\s+/).filter(Boolean);
+
+  if ((!wordBoundaries || wordBoundaries.length === 0) && rawTokens.length > 0) {
+    const weights = rawTokens.map(w => Math.max(2, w.replace(/[^\wÀ-ÿ]/g, '').length) + (/[,.;:!?]$/.test(w) ? 3 : 1));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    let curOffset = 0;
+    wordBoundaries = rawTokens.map((w, idx) => {
+      const dur = (weights[idx] / totalWeight) * sceneDurationSec;
+      const wb = { word: w, offsetSec: curOffset, durationSec: dur };
+      curOffset += dur;
+      return wb;
+    });
+  }
 
   if (wordBoundaries && wordBoundaries.length > 0) {
     const enriched = wordBoundaries.map((wb, i) => {
@@ -632,11 +647,9 @@ function trimSceneWavForSeamlessLoop(asset, mode) {
   }
 }
 
-// Clean 720x1280 HD Frame Renderer: Monotonic Ken Burns Zoom + 0.08s Film Flash + 3-Color Semantic Karaoke Subtitles ONLY!
-async function renderCaptionedFrame({
-  photoBuffer,
-  zoomProgress = 0,
-  isTransitionFlash = false,
+// Ultra-Fast Transparent 720x490 Subtitle Overlay Strip Renderer (3-Color Semantic Karaoke Pills + Progress Bar)
+// Leaves the background photo zoom to FFmpeg's native 24-FPS C++ zoompan engine so zoom is 100% buttery-smooth at 24 FPS!
+async function renderSubtitleOverlayStrip({
   wordsChunk,
   activeWordIdx = 0,
   palette = null,
@@ -656,54 +669,37 @@ async function renderCaptionedFrame({
 
   const lineSpacing = Math.round(fontSize * 1.42);
   const baseStartY = wrappedLines.length === 1 ? 885 : (wrappedLines.length === 2 ? 850 : 820);
+  const localStartY = baseStartY - SUB_STRIP_Y;
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
-    const yPos = baseStartY + lIdx * lineSpacing;
+    const yPos = localStartY + lIdx * lineSpacing;
     return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
   }).join('\n');
 
   const progressWidth = Math.max(14, Math.round(WIDTH * progressRatio));
 
-  // UPGRADE #6: 0.08s Film Flash (+22% brightness pulse on the very first frame of each of the 14 photos)
-  const flashOverlayRect = isTransitionFlash
-    ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="#FFFFFF" fill-opacity="0.22"/>`
-    : '';
-
-  // Clean HUD SVG containing Bottom Vignette + Film Flash + Karaoke Subtitles + Bottom Progress Bar ONLY!
-  const hudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  const stripSvg = `<svg width="${WIDTH}" height="${SUB_STRIP_H}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
-        <stop offset="55%" stop-color="#000000" stop-opacity="0.16"/>
-        <stop offset="100%" stop-color="#04060c" stop-opacity="0.78"/>
+      <linearGradient id="subBgGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.00"/>
+        <stop offset="38%" stop-color="#000000" stop-opacity="0.26"/>
+        <stop offset="100%" stop-color="#04060c" stop-opacity="0.82"/>
       </linearGradient>
     </defs>
-    <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
-    ${flashOverlayRect}
+    <rect width="${WIDTH}" height="${SUB_STRIP_H}" fill="url(#subBgGrad)"/>
     <g>
       ${subtitleLinesSvg}
     </g>
-    <rect x="0" y="${HEIGHT - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
-    <rect x="0" y="${HEIGHT - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
+    <rect x="0" y="${SUB_STRIP_H - 14}" width="${WIDTH}" height="14" fill="#ffffff" fill-opacity="0.18"/>
+    <rect x="0" y="${SUB_STRIP_H - 14}" width="${progressWidth}" height="14" fill="${pal.pillFill}"/>
   </svg>`;
 
-  // UPGRADE #3: Monotonic Center-Locked Ken Burns Zoom (1.00x -> 1.09x from 800x1422 Overscan Buffer — zero shaking!)
-  const clampedProg = Math.max(0, Math.min(1, zoomProgress));
-  const scaleFactor = 1.0 - (clampedProg * 0.088);
-  const cropW = Math.max(WIDTH, Math.round(OVERSCAN_W * scaleFactor));
-  const cropH = Math.max(HEIGHT, Math.round(OVERSCAN_H * scaleFactor));
-  const left = Math.round((OVERSCAN_W - cropW) / 2);
-  const top = Math.round((OVERSCAN_H - cropH) / 2);
-
-  await sharp(photoBuffer)
-    .extract({ left, top, width: cropW, height: cropH })
-    .resize(WIDTH, HEIGHT)
-    .composite([{ input: Buffer.from(hudSvg), top: 0, left: 0 }])
-    .jpeg({ quality: 84 })
+  await sharp(Buffer.from(stripSvg))
+    .png({ compressionLevel: 1 })
     .toFile(outputFramePath);
 }
 
-// Single-Pass Studio 4.0 Master Timeline Renderer (All 6 Retention Upgrades Active!)
+// Single-Pass Studio 4.0 Master Timeline Renderer (True 24-FPS Smooth Zoompan + All 6 Retention Upgrades Active!)
 async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) {
   const os = require('os');
   const jobId = `short_${Date.now()}`;
@@ -791,47 +787,61 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const midCutTimes = [];
   totalDuration = 0;
   for (let i = 0; i < sceneAssets.length; i++) {
-    sceneStartTimes.push(totalDuration);
-    midCutTimes.push(totalDuration + sceneAssets[i].duration * 0.50);
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando Ken Burns Suave + Legendas Karaokê 3 Cores...');
+  onProgress(68, 'Renderizando Zoom 24 FPS Ultra-Suave + Legendas Karaokê 3 Cores...');
 
-  const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
+  const masterFramesListPath = path.join(tmpDir, 'master_subs.txt');
   let masterConcatContent = '';
   let elapsedDuration = 0;
   let lastRenderedFramePath = null;
   const frameJobs = [];
   const wordTriggerEvents = [];
+  const zoompanClips = [];
 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
     const timedChunks = buildExactTimedChunks(asset.narration, asset.wordBoundaries, asset.duration);
     const halfIdx = Math.max(1, Math.floor(timedChunks.length / 2));
-    let sceneElapsed = 0;
 
     // On the final loop scene, use Scene 1's Photo A in the 2nd half so the visual loop to 0:00 is seamless!
     const isLastScene = (i === sceneAssets.length - 1 && sceneAssets.length >= 2);
     const secondHalfBuf = isLastScene ? sceneAssets[0].photoBufA : asset.photoBufB;
 
+    const photoPathA = path.join(tmpDir, `photo_${i}_A.jpg`);
+    const photoPathB = path.join(tmpDir, `photo_${i}_B.jpg`);
+    fs.writeFileSync(photoPathA, asset.photoBufA);
+    fs.writeFileSync(photoPathB, secondHalfBuf);
+
+    // Frame-lock the 24-FPS zoompan clips to the exact duration of the 1st and 2nd half subtitle chunks
+    const rawDurA = timedChunks.slice(0, halfIdx).reduce((acc, tc) => acc + tc.duration, 0);
+    const rawDurB = timedChunks.slice(halfIdx).reduce((acc, tc) => acc + tc.duration, 0);
+    const totalSceneFrames = Math.max(24, Math.round(asset.duration * VIDEO_FPS));
+    const framesA = Math.max(12, Math.round(totalSceneFrames * (rawDurA / Math.max(0.01, rawDurA + rawDurB))));
+    const framesB = Math.max(12, totalSceneFrames - framesA);
+    const exactDurA = framesA / VIDEO_FPS;
+    const exactDurB = framesB / VIDEO_FPS;
+
+    const scaleA = exactDurA / Math.max(0.001, rawDurA);
+    const scaleB = exactDurB / Math.max(0.001, rawDurB);
     for (let c = 0; c < timedChunks.length; c++) {
-      const framePath = path.join(tmpDir, `frame_${i}_${c}.jpg`);
+      timedChunks[c].duration *= (c < halfIdx) ? scaleA : scaleB;
+    }
+
+    sceneStartTimes.push(elapsedDuration);
+    midCutTimes.push(elapsedDuration + exactDurA);
+
+    zoompanClips.push({ photoPath: photoPathA, frames: framesA, zoomDir: 'in' });
+    zoompanClips.push({ photoPath: photoPathB, frames: framesB, zoomDir: 'out' });
+
+    let sceneElapsed = 0;
+    for (let c = 0; c < timedChunks.length; c++) {
+      const framePath = path.join(tmpDir, `sub_${i}_${c}.png`);
       const thisChunkDur = timedChunks[c].duration;
       const chunkStartAbsSec = elapsedDuration + sceneElapsed;
       sceneElapsed += thisChunkDur;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
-
-      const isFirstHalf = (c < halfIdx);
-      const photoBuffer = isFirstHalf ? asset.photoBufA : secondHalfBuf;
-
-      // UPGRADE #3: Strictly monotonic 0.0 -> 1.0 Ken Burns zoom progress within each half-scene
-      const zoomProgress = isFirstHalf
-        ? (c / Math.max(1, halfIdx - 1))
-        : ((c - halfIdx) / Math.max(1, (timedChunks.length - halfIdx) - 1));
-
-      // UPGRADE #6: Trigger 0.08s Film Flash on the very first frame of each new photo (c === 0 or c === halfIdx)
-      const isTransitionFlash = (c === 0 || c === halfIdx);
 
       // UPGRADE #5: Collect exact timestamp if the active word is a Gold Number or Danger Shock word
       const activeW = timedChunks[c].words[timedChunks[c].activeWordIdx] || '';
@@ -841,9 +851,6 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       }
 
       frameJobs.push({
-        photoBuffer,
-        zoomProgress,
-        isTransitionFlash,
         wordsChunk: timedChunks[c].words,
         activeWordIdx: timedChunks[c].activeWordIdx,
         palette,
@@ -857,13 +864,13 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       lastRenderedFramePath = safeFramePath;
     }
 
-    elapsedDuration += asset.duration;
+    elapsedDuration += (exactDurA + exactDurB);
   }
 
-  // Render all 720x1280 JPEG frames in parallel batches
-  const BATCH_SIZE = 28;
+  // Render all 720x490 transparent PNG subtitle strips in parallel (~0.6s total!)
+  const BATCH_SIZE = 36;
   for (let b = 0; b < frameJobs.length; b += BATCH_SIZE) {
-    await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderCaptionedFrame(job)));
+    await Promise.all(frameJobs.slice(b, b + BATCH_SIZE).map(job => renderSubtitleOverlayStrip(job)));
   }
 
   if (lastRenderedFramePath) {
@@ -871,7 +878,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(86, 'Masterizando Vídeo 720x1280 HD + SFX por Palavra + Voz Shure SM7B...');
+  onProgress(86, 'Masterizando Zoom 24 FPS Nativo + SFX por Palavra + Voz Shure SM7B...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -882,21 +889,50 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  const ffmpegArgs = [
-    '-y',
-    '-f', 'concat', '-safe', '0', '-i', masterFramesListPath,
-    '-i', masterVoiceWavPath,
-    '-i', bgMusicWav,
-    '-filter_complex',
-    '[1:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[2:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]',
-    '-map', '0:v',
+  // Build True 24-FPS Super-Sampled Zoompan Filter Complex + Transparent Subtitle Strip Overlay
+  const ffmpegArgs = ['-y'];
+  const filterParts = [];
+  const concatVideoInputs = [];
+
+  for (let k = 0; k < zoompanClips.length; k++) {
+    const clip = zoompanClips[k];
+    ffmpegArgs.push('-i', clip.photoPath);
+    const denom = Math.max(1, clip.frames - 1);
+    // Smooth 24-FPS Center-Locked Zoom-In (1.000 -> 1.135) on Photo A, and Zoom-Out (1.135 -> 1.000) on Photo B
+    // Because Photo B ends at 1.000 and Scene 0 Photo A starts at 1.000, the loop transition at 0:00 has 0% zoom jump!
+    const zExpr = clip.zoomDir === 'in'
+      ? `1.0+0.135*(on/${denom})`
+      : `1.135-0.135*(on/${denom})`;
+    filterParts.push(
+      `[${k}:v]zoompan=z='${zExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${clip.frames}:s=${WIDTH}x${HEIGHT}:fps=${VIDEO_FPS},fade=t=in:st=0:d=0.08:color=white[zp${k}]`
+    );
+    concatVideoInputs.push(`[zp${k}]`);
+  }
+
+  const subsInputIdx = zoompanClips.length;
+  const voiceInputIdx = subsInputIdx + 1;
+  const bgmInputIdx = subsInputIdx + 2;
+
+  ffmpegArgs.push('-f', 'concat', '-safe', '0', '-i', masterFramesListPath);
+  ffmpegArgs.push('-i', masterVoiceWavPath);
+  ffmpegArgs.push('-i', bgMusicWav);
+
+  filterParts.push(`${concatVideoInputs.join('')}concat=n=${zoompanClips.length}:v=1:a=0[bg]`);
+  filterParts.push(`[bg][${subsInputIdx}:v]overlay=0:${SUB_STRIP_Y}:format=yuv420[vout]`);
+  filterParts.push(
+    `[${voiceInputIdx}:a]highpass=f=75,acompressor=threshold=-16dB:ratio=3:attack=5:release=60:makeup=2,volume=1.38[voice];[${bgmInputIdx}:a]volume=0.33[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+  );
+
+  ffmpegArgs.push(
+    '-filter_complex', filterParts.join(';'),
+    '-map', '[vout]',
     '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p', '-r', String(VIDEO_FPS),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-shortest',
     '-movflags', '+faststart',
     finalMp4Path
-  ];
+  );
 
   execFileSync(ffmpegPath, ffmpegArgs, { stdio: 'ignore' });
 
@@ -910,15 +946,15 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     videoUrl = `data:video/mp4;base64,${b64}`;
   }
 
-  onProgress(100, 'Short com Vídeos Reais HD finalizado!');
+  onProgress(100, 'Short com Zoom 20 FPS Nativo HD finalizado!');
 
   return {
+    ...scriptData,
     id: jobId,
     filename: finalFilename,
     url: videoUrl,
     duration: Math.round(totalDuration),
-    createdAt: new Date().toISOString(),
-    ...scriptData
+    createdAt: new Date().toISOString()
   };
 }
 
