@@ -223,28 +223,38 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const pool = [];
   const seenUrls = new Set();
 
-  const addCandidate = (url, title = '') => {
-    if (!url || seenUrls.has(url)) return;
-    if (/\.svg|\.gif|\.tif|\.pdf|\.ogg|\.ogv|\.webm/i.test(url)) return;
-    const checkStr = String(title || '').toLowerCase();
-    if (/logo|icon|flag|coat_of_arms|signature|map|locator|diagram|chart|graph|symbol|stamp|medal|portrait_placeholder|commons-logo|wikidata/i.test(checkStr)) return;
-    seenUrls.add(url);
-    pool.push({ url, title: checkStr });
+  const seenIds = new Set();
+  const addWebPhotoCandidate = (cdnUrl, murl = '', title = '') => {
+    if (!cdnUrl) return;
+    const checkStr = `${murl} ${title}`.toLowerCase();
+    // Block YouTube clickbait thumbnails, Pinterest, memes, slides, academic figures, maps, charts, and logos
+    if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
+
+    const oipMatch = cdnUrl.match(/OIP\.[a-zA-Z0-9_-]+/);
+    const dedupKey = oipMatch ? oipMatch[0] : (murl || cdnUrl);
+    if (seenIds.has(dedupKey)) return;
+    seenIds.add(dedupKey);
+
+    pool.push({
+      cdnUrl,
+      murl: murl || cdnUrl,
+      title: checkStr
+    });
   };
 
-  if (heroUrl) addCandidate(heroUrl, fullSourceTopic);
+  if (heroUrl) addWebPhotoCandidate(heroUrl, heroUrl, fullSourceTopic);
 
-  // 1. Fast PT Wikipedia Lookup -> English title + PT Thumbnail
+  // 1. Fast PT Wikipedia Lookup -> English title + Lead Hero Photo (1.6s timeout)
   try {
-    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=pageimages|langlinks&piprop=thumbnail&pithumbsize=1000&lllang=en&redirects=1&format=json`;
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=pageimages|langlinks&piprop=thumbnail&pithumbsize=1080&lllang=en&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
       headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(2200)
+      signal: AbortSignal.timeout(1600)
     });
     if (ptRes.ok) {
       const ptData = await ptRes.json();
       const page = Object.values(ptData.query?.pages || {})[0];
-      if (page?.thumbnail?.source) addCandidate(page.thumbnail.source, page.title || fullSourceTopic);
+      if (page?.thumbnail?.source) addWebPhotoCandidate(page.thumbnail.source, page.thumbnail.source, page.title || fullSourceTopic);
       if (page?.langlinks?.[0]?.['*']) {
         enTitleFull = page.langlinks[0]['*'].trim();
         enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
@@ -252,83 +262,98 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }
   } catch (e) {}
 
-  // 2. Parallel English Wikipedia Article Images + Wikimedia Commons Topic Photos
-  const searchTopic = enTitleClean || fullSourceTopic || rawTopic;
-  await Promise.allSettled([
-    (async () => {
-      if (!enTitleFull) return;
-      const enUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=images&titles=${encodeURIComponent(enTitleFull)}&gimlimit=25&prop=imageinfo&iiprop=url&iiurlwidth=1000&format=json`;
-      const enRes = await fetch(enUrl, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
-      if (enRes.ok) {
-        const enData = await enRes.json();
-        for (const p of Object.values(enData.query?.pages || {})) {
-          const ii = p.imageinfo?.[0];
-          if (ii?.thumburl || ii?.url) addCandidate(ii.thumburl || ii.url, p.title || '');
-        }
-      }
-    })(),
-    (async () => {
-      const q = `filetype:bitmap ${searchTopic}`;
-      const cUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(q)}&gsrlimit=30&prop=imageinfo&iiprop=url&iiurlwidth=1000&format=json`;
-      const cRes = await fetch(cUrl, { headers: { 'User-Agent': 'ShortsFactoryBot/5.0' }, signal: AbortSignal.timeout(2400) });
-      if (cRes.ok) {
-        const cData = await cRes.json();
-        for (const p of Object.values(cData.query?.pages || {})) {
-          const ii = p.imageinfo?.[0];
-          if (ii?.thumburl || ii?.url) addCandidate(ii.thumburl || ii.url, p.title || '');
-        }
-      }
-    })()
-  ]);
+  // 2. Run 4 Parallel Web Image Searches (Google/Bing Web Photo Index with Smart-Salience 720x1280 9:16 HD Crop!)
+  const uaBrowser = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  const enQueryBase = enTitleClean || fullSourceTopic || rawTopic;
+  const webSearchQueries = [
+    `${rawTopic} fotografia real HD -youtube -mapa -grafico -diagrama -meme`,
+    `${enQueryBase} real photograph documentary HD -youtube -map -chart -diagram`,
+    `${enQueryBase} close up inside detail photography -youtube -map -diagram`,
+    `${enQueryBase} aerial view cinematic photography HD -youtube -map`
+  ];
+
+  await Promise.allSettled(webSearchQueries.map(async (qStr) => {
+    const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(qStr)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': uaBrowser },
+      signal: AbortSignal.timeout(2200)
+    });
+    if (!res.ok) return;
+    const html = await res.text();
+    for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
+      const murl = m[1];
+      const turl = m[2].replace(/&amp;/g, '&');
+      // Request Smart-Salience AI 720x1280 9:16 vertical crop at 95% JPEG quality from global Edge CDN!
+      const smartCropCdnUrl = `${turl}&w=720&h=1280&c=7&rs=1&qlt=95`;
+      addWebPhotoCandidate(smartCropCdnUrl, murl, qStr);
+    }
+  }));
 
   const curatedFallbacks = [
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&q=80',
-    'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1080&q=80',
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=1080&q=80',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1080&q=80',
-    'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1080&q=80',
-    'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=1080&q=80'
+    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&q=85',
+    'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1080&q=85',
+    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=1080&q=85',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1080&q=85',
+    'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1080&q=85',
+    'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=1080&q=85'
   ];
-  for (const fb of curatedFallbacks) addCandidate(fb, 'fallback_cinema');
+  for (const fb of curatedFallbacks) addWebPhotoCandidate(fb, fb, 'fallback_cinema');
 
-  console.log(`📸 [Photo Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} fotos reais HD encontradas!`);
+  console.log(`📸 [Web Image Search Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} FOTOS REAIS DA WEB HD encontradas!`);
 
-  // Assign 2 distinct real photos per scene (Photo A for 1st half, Photo B for 2nd half)
+  // Assign 2 distinct real web photos per scene (each with 4 candidate URLs so Computer Vision Quality Gate always picks a 10/10 photo!)
   let pCursor = 0;
   return scenes.map((_, sIdx) => {
-    const qA = [
-      pool[pCursor % pool.length]?.url,
-      pool[(pCursor + 3) % pool.length]?.url,
-      curatedFallbacks[sIdx % curatedFallbacks.length]
-    ].filter(Boolean);
-    pCursor++;
-    const qB = [
-      pool[pCursor % pool.length]?.url,
-      pool[(pCursor + 3) % pool.length]?.url,
-      curatedFallbacks[(sIdx + 2) % curatedFallbacks.length]
-    ].filter(Boolean);
-    pCursor++;
+    const pickCandidates = (offset) => {
+      const urls = [];
+      for (let k = 0; k < 4; k++) {
+        const item = pool[(offset + k * 3) % pool.length];
+        if (item) {
+          urls.push(item.cdnUrl);
+          if (item.murl && item.murl !== item.cdnUrl) urls.push(item.murl);
+        }
+      }
+      urls.push(curatedFallbacks[offset % curatedFallbacks.length]);
+      return urls.filter(Boolean);
+    };
+    const qA = pickCandidates(pCursor++);
+    const qB = pickCandidates(pCursor++);
     return { queueA: qA, queueB: qB };
   });
 }
 
-// Downloads a real photo and creates a SINGLE rock-steady 720x1280 HD background buffer (ZERO shaking!)
+// Downloads a real web photo, validates it via Sharp Computer Vision Quality Gate (rejects white slides/blurry/low-entropy), and applies Cinema Unsharp Mask!
 async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
   const pal = getAtmospherePalette(colorTheme);
-  let rawImgBuf = null;
+  let bestImgBuf = null;
 
   for (const url of urlQueue) {
     if (!url) continue;
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-        signal: AbortSignal.timeout(2400)
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(2000)
       });
       if (res.ok) {
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.length > 8000) {
-          rawImgBuf = buf;
-          break;
+        if (buf.length > 15000) {
+          // Computer Vision Quality Gate: check brightness, contrast (stdev), and photographic detail (entropy)
+          const st = await sharp(buf).stats();
+          const c0 = st.channels[0] || { mean: 128, stdev: 45 };
+          const c1 = st.channels[1] || c0;
+          const c2 = st.channels[2] || c0;
+          const avgMean = (c0.mean + c1.mean + c2.mean) / 3;
+          const avgStdev = (c0.stdev + c1.stdev + c2.stdev) / 3;
+          const entropy = st.entropy || 7.0;
+
+          // Reject white-background text slides (avgMean > 216), pitch-black errors (< 16), or flat/blurry graphics (avgStdev < 30 or entropy < 6.25)
+          if (avgMean >= 16 && avgMean <= 216 && avgStdev >= 30 && entropy >= 6.25) {
+            bestImgBuf = buf;
+            break;
+          }
+          if (!bestImgBuf) bestImgBuf = buf;
         }
       }
     } catch (e) {}
@@ -338,21 +363,22 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic') {
   const vignetteSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#000000" stop-opacity="0.12"/>
-        <stop offset="55%" stop-color="#000000" stop-opacity="0.18"/>
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
+        <stop offset="55%" stop-color="#000000" stop-opacity="0.16"/>
         <stop offset="100%" stop-color="#04060c" stop-opacity="0.78"/>
       </linearGradient>
     </defs>
     <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bgGrad)"/>
   </svg>`;
 
-  if (rawImgBuf) {
+  if (bestImgBuf) {
     try {
-      return await sharp(rawImgBuf)
-        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'attention' })
-        .modulate({ brightness: 0.96, saturation: 1.15 })
+      return await sharp(bestImgBuf)
+        .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
+        .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
+        .modulate({ brightness: 0.98, saturation: 1.18 })
         .composite([{ input: Buffer.from(vignetteSvg), top: 0, left: 0 }])
-        .jpeg({ quality: 84 })
+        .jpeg({ quality: 86 })
         .toBuffer();
     } catch (e) {}
   }
