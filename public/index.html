@@ -402,13 +402,19 @@
       </div>
 
       <!-- BOTÕES DE DOWNLOAD E ENVIO DIRETO PRO CELULAR -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;">
         <a id="downloadLink" class="hero-btn" style="padding:14px; font-size:0.88rem; text-decoration:none; background:linear-gradient(135deg, #00c853, #009624);" href="#" download>
           ⬇️ BAIXAR VÍDEO .MP4
         </a>
         <button class="hero-btn" style="padding:14px; font-size:0.88rem; background:linear-gradient(135deg, #00b4db, #0083b0);" onclick="shareToPhone()">
           📲 COMPARTILHAR NO APP
         </button>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <a id="tgDirectLink" href="https://t.me/+3Ee2RjEwlrwxMTdk" target="_blank" class="btn-secondary" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:11px; font-size:0.82rem; text-decoration:none; color:#54a9eb; border-color:rgba(84,169,235,0.45); font-weight:800; background:rgba(84,169,235,0.08);">
+          <span>✈️ ABRIR VÍDEO NO TELEGRAM (@Shofacbot)</span>
+        </a>
       </div>
 
       <!-- 1. KIT TIKTOK (DESCRIÇÃO COMPLETA + EXATAMENTE 5 HASHTAGS) -->
@@ -453,6 +459,35 @@
       <div class="meta-box" style="border-color:rgba(0,230,118,0.35); background:rgba(0,230,118,0.05);">
         <strong style="color:#00e676; margin-bottom:6px;">🔁 CONEXÃO DO LOOP INFINITO (FINAL ➔ INÍCIO 0:00)</strong>
         <div id="videoLoopBridgeDisplay" style="font-size:0.78rem; color:#e0ffe8; line-height:1.4;"></div>
+      </div>
+    </div>
+
+    <!-- TELEGRAM CLOUD DATABASE & MULTI-DEVICE STORAGE -->
+    <div class="card" style="border-color:rgba(0, 136, 204, 0.45); background:linear-gradient(180deg, #101528 0%, #0c0e18 100%);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.3rem;">✈️</span>
+          <div>
+            <h3 style="font-size:0.92rem; margin:0; color:#54a9eb; font-weight:800;">Nuvem Telegram & Anti-Repetição</h3>
+            <span id="tgStatusBadge" style="font-size:0.7rem; color:#00e676; font-weight:700;">🟢 Conectado: @Shofacbot em "Shorts Factory History"</span>
+          </div>
+        </div>
+        <a href="https://t.me/+3Ee2RjEwlrwxMTdk" target="_blank" class="btn-secondary" style="padding:6px 12px; font-size:0.72rem; text-decoration:none; color:#54a9eb; border-color:rgba(84,169,235,0.4); font-weight:700;">
+          ✈️ Abrir Grupo
+        </a>
+      </div>
+
+      <p style="font-size:0.78rem; color:#a0a2bc; margin-bottom:12px; line-height:1.4;">
+        Todos os shorts gerados são enviados automaticamente para seu grupo no Telegram com armazenamento <strong>100% ilimitado</strong>, legenda completa e download para a galeria do celular. A base de dados fixada garante <strong>zero temas repetidos</strong> em qualquer aparelho.
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <button id="btnSyncTelegram" class="btn-secondary" style="padding:10px 8px; font-size:0.75rem; color:#54a9eb; border-color:rgba(84,169,235,0.4); font-weight:700;" onclick="syncVideosWithTelegram()">
+          🔄 Sincronizar Vídeos
+        </button>
+        <button id="btnRestoreTelegram" class="btn-secondary" style="padding:10px 8px; font-size:0.75rem; color:#00e676; border-color:rgba(0,230,118,0.35); font-weight:700;" onclick="restoreDatabaseFromTelegram()">
+          🛡️ Puxar Memória Anti-Repetição
+        </button>
       </div>
     </div>
 
@@ -1349,6 +1384,7 @@
           <div>
             <h4>${escapeHtmlAttr(v.title)}</h4>
             <span>${escapeHtmlAttr(v.badge || 'FATOS CURIOSOS')} &bull; ${v.duration || 65}s</span>
+            ${(v.telegram && v.telegram.messageId) ? `<span style="display:inline-block; font-size:0.62rem; background:rgba(84,169,235,0.18); color:#54a9eb; border:1px solid rgba(84,169,235,0.35); padding:1px 6px; border-radius:999px; margin-left:6px; font-weight:800;">✈️ Nuvem</span>` : ''}
           </div>
           <span style="color:var(--primary); font-weight:800; font-size:0.82rem;">▶️ Abrir</span>
         </div>
@@ -1356,6 +1392,48 @@
 
       if (!currentVideoData && cachedHistoryVideos.length > 0) {
         await displayVideoResult(cachedHistoryVideos[0]);
+      }
+    }
+
+    async function syncVideosWithTelegram() {
+      const btn = document.getElementById('btnSyncTelegram');
+      btn.disabled = true;
+      btn.textContent = '⏳ Sincronizando...';
+      try {
+        const res = await fetch('/api/telegram/sync-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`✅ Sincronizado com Telegram (${data.synced} novos enviados)!`);
+          await loadHistoryGallery();
+        } else {
+          throw new Error(data.error || 'Erro na sincronização');
+        }
+      } catch (err) {
+        alert('Erro ao sincronizar com Telegram: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Sincronizar Vídeos';
+      }
+    }
+
+    async function restoreDatabaseFromTelegram() {
+      const btn = document.getElementById('btnRestoreTelegram');
+      btn.disabled = true;
+      btn.textContent = '⏳ Baixando memória...';
+      try {
+        const res = await fetch('/api/telegram/restore-db', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`🛡️ Memória anti-repetição atualizada (${data.totalTopics} temas protegidos)!`);
+          await loadHistoryGallery();
+        } else {
+          throw new Error(data.error || 'Nenhuma base encontrada fixada no Telegram');
+        }
+      } catch (err) {
+        alert('Erro ao puxar database do Telegram: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🛡️ Puxar Memória Anti-Repetição';
       }
     }
 
