@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { prepareTextForHumanSpeech } = require('./tts_and_audio');
 
 const BUNDLED_DATA_DIR = path.join(__dirname, '..', 'data');
 const BUNDLED_HISTORY_FILE = path.join(BUNDLED_DATA_DIR, 'history.json');
@@ -473,30 +474,55 @@ function extractHighDensityFactualSentences(rawText, cleanTopic) {
 
 // Build script directly from our Curated Documentary Facts Bank (100% concrete facts, numbers & storytelling)
 async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
-  const cleanTopic = curated.topic;
+  const cleanTopic = String(curated.topic || '').replace(/\s*\([^)]*\)/g, '').trim();
   let wikiImage = null;
   try {
     const art = await fetchFullWikipediaArticle(curated.wikiSearch || curated.topic);
     if (art && art.wikiImage) wikiImage = art.wikiImage;
   } catch (e) {}
 
-  const rawHook = (curated.loopStart || `Você sabia que existe um segredo inacreditável por trás de ${cleanTopic}?`).replace(/^\.\.\.\s*/, '');
+  const rawHook = (curated.loopStart || `Você já imaginou um segredo inacreditável sobre ${cleanTopic}?`).replace(/^\.\.\.\s*/, '');
   const cleanHook = rawHook.charAt(0).toUpperCase() + rawHook.slice(1);
 
   const builtScenes = curated.scenes.map((sc, idx) => {
     const isAntonio = (idx % 2 === 1);
     let narrationText = sc.narration;
     if (idx === 0) {
-      narrationText = `${cleanHook} ${sc.narration}`;
+      narrationText = `${cleanHook} Olha só: ${sc.narration}`;
     } else if (isAntonio && idx === 1) {
-      narrationText = `Sério? Mas como isso funciona de verdade? ${sc.narration}`;
+      const p2 = [
+        'Nossa, parece loucura! Mas como assim? Como isso se formou?',
+        'Caramba, isso parece ficção científica! Mas como isso aconteceu na prática?',
+        'Espera aí... Você tá me dizendo que isso acontece de verdade na natureza?'
+      ];
+      narrationText = `${p2[Math.floor(Math.random() * p2.length)]} ${sc.narration}`;
+    } else if (!isAntonio && idx === 2) {
+      const p3 = [
+        'Pois é! E para você ter uma noção de como tudo funciona:',
+        'Exatamente! E olha o detalhe fascinante por trás disso:',
+        'Olha que loucura como esse mecanismo funciona:'
+      ];
+      narrationText = `${p3[Math.floor(Math.random() * p3.length)]} ${sc.narration}`;
     } else if (isAntonio && idx === 3) {
-      narrationText = `Caramba! E os números são ainda mais impressionantes: ${sc.narration}`;
+      const p4 = [
+        'Caramba, os números disso são simplesmente surreais! Olha essa medição:',
+        'Cara, não dá nem para imaginar a dimensão disso! Presta atenção nesses dados:',
+        'Inacreditável... Os cientistas analisaram isso de perto e comprovaram que:'
+      ];
+      narrationText = `${p4[Math.floor(Math.random() * p4.length)]} ${sc.narration}`;
+    } else if (!isAntonio && idx === 4) {
+      const p5 = [
+        'E não para por aí... O registro oficial comprovou algo que chocou todo mundo:',
+        'E tem mais um detalhe impressionante que pouca gente sabe:',
+        'Olha esse dado histórico que os pesquisadores encontraram:'
+      ];
+      narrationText = `${p5[Math.floor(Math.random() * p5.length)]} ${sc.narration}`;
     } else if (isAntonio && idx === 5) {
-      narrationText = `Inacreditável! ${sc.narration}`;
+      const cleanScNarration = sc.narration.replace(/E você[, ]+teria coragem[^.!?]*[.!?]/gi, '').replace(/Comente[^.!?]*[.!?]/gi, '').trim();
+      narrationText = `Inacreditável como a ciência e o mundo funcionam! ${cleanScNarration} E você aí que tá assistindo, já conhecia essa história? Conta pra gente nos comentários!`;
     }
     return {
-      narration: narrationText,
+      narration: prepareTextForHumanSpeech(narrationText),
       speaker: isAntonio ? 'Antônio' : 'Thalita',
       voice: isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: sc.imageQuery || cleanTopic,
@@ -507,9 +533,9 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     };
   });
 
-  const outroText = `Fatos reais e impressionantes como esse sobre ${cleanTopic} mostram como o nosso mundo é incrível! Se você curtiu esse vídeo, já segue o canal, deixa o like e comente sua opinião aqui embaixo. Até a próxima!`;
+  const outroText = `Histórias reais e fascinantes como essa sobre ${cleanTopic} mostram como o nosso universo é incrível! Se você curtiu esse vídeo, já se inscreve no canal, deixa o like e compartilha com um amigo curioso. Até o próximo vídeo!`;
   builtScenes.push({
-    narration: outroText,
+    narration: prepareTextForHumanSpeech(outroText),
     speaker: 'Thalita',
     voice: 'pt-BR-ThalitaMultilingualNeural',
     imageQuery: curated.scenes[0]?.imageQuery || cleanTopic,
@@ -626,22 +652,58 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #documentario #tiktokbrasil #fyp #viral #shorts`;
 
   const hookOpeners = [
-    `Você sabia que existe um mistério inacreditável por trás de ${cleanTopic}?`,
-    `A verdadeira história científica de ${cleanTopic} guarda fatos que surpreendem até os especialistas!`,
-    `Quase ninguém conhece os detalhes reais sobre ${cleanTopic}, mas os registros comprovam algo impressionante!`
+    `Você já imaginou um segredo científico tão impressionante quanto o de ${cleanTopic}? Presta atenção nisso:`,
+    `Existe um fato inacreditável sobre ${cleanTopic} que quase ninguém conhece! Olha só essa descoberta:`,
+    `A verdadeira história por trás de ${cleanTopic} guarda revelações que chocam até os especialistas. Olha isso:`
   ];
   const chosenHook = hookOpeners[Math.floor(Math.random() * hookOpeners.length)];
 
+  const antonioReactionsScene2 = [
+    `Nossa, parece loucura! Mas como assim? Como é que isso se formou? Pois é:`,
+    `Caramba, isso parece ficção científica! Mas isso é comprovado mesmo? Olha só:`,
+    `Espera aí... Você tá me dizendo que isso acontece de verdade? Olha que bizarro:`,
+    `Sério? Mas como isso é possível na natureza? Os registros mostram que:`
+  ];
+  const chosenReaction2 = antonioReactionsScene2[Math.floor(Math.random() * antonioReactionsScene2.length)];
+
+  const thalitaBridgesScene3 = [
+    `Exatamente, Antônio! E o mais fascinante é o mecanismo por trás disso:`,
+    `Pois é! E para você ter uma noção de como tudo funciona na prática:`,
+    `Olha que detalhe incrível: os pesquisadores analisaram a fundo e descobriram que:`
+  ];
+  const chosenBridge3 = thalitaBridgesScene3[Math.floor(Math.random() * thalitaBridgesScene3.length)];
+
+  const antonioReactionsScene4 = [
+    `Caramba, os números disso são simplesmente surreais! Olha essa proporção:`,
+    `Cara, não dá nem para imaginar a dimensão disso! Presta atenção nessa medição:`,
+    `Inacreditável... Os cientistas mediram isso de perto e comprovaram que:`
+  ];
+  const chosenReaction4 = antonioReactionsScene4[Math.floor(Math.random() * antonioReactionsScene4.length)];
+
+  const thalitaBridgesScene5 = [
+    `E não para por aí... O registro oficial comprovou algo que chocou todo mundo:`,
+    `E tem mais um fato impressionante registrado pelos especialistas:`,
+    `Olha esse dado que pouca gente no mundo conhece:`
+  ];
+  const chosenBridge5 = thalitaBridgesScene5[Math.floor(Math.random() * thalitaBridgesScene5.length)];
+
+  const antonioReactionsScene6 = [
+    `Inacreditável como a ciência e a natureza funcionam! ${f6.replace(/\.*$/, '')}. E você que tá assistindo, já sabia disso? Conta pra gente nos comentários!`,
+    `Surreal demais! ${f6.replace(/\.*$/, '')}. Mas me diz você aí do outro lado: você já conhecia essa história? Deixa a sua opinião aqui embaixo!`,
+    `Sensacional! ${f6.replace(/\.*$/, '')}. E eu quero saber de você: você fazia ideia disso? Comente aqui embaixo!`
+  ];
+  const chosenReaction6 = antonioReactionsScene6[Math.floor(Math.random() * antonioReactionsScene6.length)];
+
   const outroClosers = [
-    `Essa descoberta sobre ${cleanTopic} mostra como o nosso mundo ainda guarda mistérios reais. Se você curtiu esse vídeo, já segue o canal, deixa o like e comente o que você achou!`,
-    `Fatos reais e curiosos como esse sobre ${cleanTopic} mudam nossa visão do mundo! Já segue o perfil para não perder os próximos vídeos e deixe sua opinião aqui embaixo!`,
-    `Incrível como ${cleanTopic} ainda impressiona a ciência moderna. Se você curtiu esse conteúdo, já segue o perfil e compartilha com um amigo curioso!`
+    `Essa descoberta sobre ${cleanTopic} é simplesmente fascinante! Se você curtiu esse vídeo, já se inscreve no canal, deixa o like e compartilha com um amigo curioso. Até a próxima!`,
+    `Histórias reais como essa sobre ${cleanTopic} mostram como o nosso universo é incrível! Já segue o canal para não perder os próximos vídeos e deixe seu like!`,
+    `Impressionante como ${cleanTopic} continua surpreendendo o mundo! Se você gostou, já segue o canal, deixa sua curtida e comente o que você achou!`
   ];
   const chosenOutro = outroClosers[Math.floor(Math.random() * outroClosers.length)];
 
   const allScenes = [
     {
-      narration: `${chosenHook} ${f1}`,
+      narration: prepareTextForHumanSpeech(`${chosenHook} ${f1}`),
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
@@ -650,7 +712,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `1/7 • ${cleanTopic} (Fato Principal)`
     },
     {
-      narration: `Sério? Mas como isso é possível? ${f2}`,
+      narration: prepareTextForHumanSpeech(`${chosenReaction2} ${f2}`),
       speaker: 'Antônio',
       voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
@@ -658,7 +720,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `2/7 • Dados & Origem Real`
     },
     {
-      narration: `Exatamente! E olha só esse dado específico: ${f3}`,
+      narration: prepareTextForHumanSpeech(`${chosenBridge3} ${f3}`),
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
@@ -666,7 +728,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `3/7 • Como Funciona na Prática`
     },
     {
-      narration: `Caramba! E os números são ainda mais impressionantes: ${f4}`,
+      narration: prepareTextForHumanSpeech(`${chosenReaction4} ${f4}`),
       speaker: 'Antônio',
       voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
@@ -674,7 +736,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `4/7 • Números e Proporções`
     },
     {
-      narration: `Pois é! E tem mais um fato importante registrado sobre isso: ${f5}`,
+      narration: prepareTextForHumanSpeech(`${chosenBridge5} ${f5}`),
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
@@ -682,7 +744,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       sceneLabel: `5/7 • O Registro Comprovado`
     },
     {
-      narration: `Inacreditável! ${f6.replace(/\.*$/, '')}. E você que tá assistindo, já conhecia esse fato? Comente sua opinião!`,
+      narration: prepareTextForHumanSpeech(chosenReaction6),
       speaker: 'Antônio',
       voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
@@ -691,7 +753,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
       isCommentBaitScene: true
     },
     {
-      narration: chosenOutro,
+      narration: prepareTextForHumanSpeech(chosenOutro),
       speaker: 'Thalita',
       voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
