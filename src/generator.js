@@ -292,6 +292,11 @@ function clearHistory() {
   const empty = { usedTitles: [], usedTopics: [], videos: [] };
   global.__SHORTS_FACTORY_HISTORY__ = empty;
   try { fs.writeFileSync(HISTORY_FILE, JSON.stringify(empty, null, 2), 'utf8'); } catch (e) {}
+  try {
+    if (fs.existsSync(BUNDLED_HISTORY_FILE)) {
+      fs.writeFileSync(BUNDLED_HISTORY_FILE, JSON.stringify(empty, null, 2), 'utf8');
+    }
+  } catch (e) {}
   const videosDir = path.join(__dirname, '..', 'public', 'videos');
   if (fs.existsSync(videosDir)) {
     for (const f of fs.readdirSync(videosDir)) {
@@ -300,6 +305,10 @@ function clearHistory() {
       }
     }
   }
+  try {
+    const { syncHistoryDatabaseToTelegram } = require('./telegram_storage');
+    syncHistoryDatabaseToTelegram(empty);
+  } catch (e) {}
   return empty;
 }
 
