@@ -160,11 +160,15 @@ function normalizeMetadata(item) {
 
     item.scenes.forEach((sc, idx) => {
       sc.sceneVisualKeywords = extractVisualActionKeywords(sc.narration);
+      if (!sc.speaker) {
+        sc.speaker = (idx % 2 === 1 ? 'Antônio' : 'Thalita');
+        sc.voice = (idx % 2 === 1 ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural');
+      }
       // Inject Curiosity Open-Loop Bridges at Scene 2 (~12s) and Scene 4 (~24s) so viewers cannot swipe before Scene 6
-      if (idx === 1 && sc.narration && !/mas o |só que |até que /i.test(sc.narration.slice(-45))) {
+      if (idx === 1 && sc.narration && !/mas o |só que |até que |chocante/i.test(sc.narration.slice(-45))) {
         sc.narration = sc.narration.replace(/\.*$/, '.') + ' Mas o detalhe mais chocante vem agora:';
       }
-      if (idx === 3 && sc.narration && !/mas o |só que |até que /i.test(sc.narration.slice(-45))) {
+      if (idx === 3 && sc.narration && !/mas o |só que |até que |extremo/i.test(sc.narration.slice(-45))) {
         sc.narration = sc.narration.replace(/\.*$/, '.') + ' Até que descobriram algo ainda mais extremo:';
       }
     });
@@ -486,17 +490,34 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     startText: curated.loopStart || `...quase ninguém conhece o verdadeiro segredo por trás de ${cleanTopic}!`
   };
 
-  const builtScenes = curated.scenes.map((sc, idx) => ({
-    narration: idx === 0 ? `${loopBridge.startText} ${sc.narration}` : sc.narration,
-    imageQuery: sc.imageQuery || cleanTopic,
-    fallbackThemeQuery: sc.fallbackThemeQuery || `${cleanTopic} photo`,
-    directImageUrl: idx === 0 ? wikiImage : null,
-    sceneLabel: sc.sceneLabel || `${idx + 1}/7 • ${cleanTopic}`,
-    isCommentBaitScene: idx === curated.scenes.length - 1
-  }));
+  const builtScenes = curated.scenes.map((sc, idx) => {
+    const isAntonio = (idx % 2 === 1);
+    let narrationText = sc.narration;
+    if (idx === 0) {
+      narrationText = `${loopBridge.startText} ${sc.narration}`;
+    } else if (isAntonio && idx === 1) {
+      narrationText = `Sério? Mas como isso funciona de verdade? ${sc.narration}`;
+    } else if (isAntonio && idx === 3) {
+      narrationText = `Caramba! E os números são ainda mais impressionantes: ${sc.narration}`;
+    } else if (isAntonio && idx === 5) {
+      narrationText = `Inacreditável! ${sc.narration}`;
+    }
+    return {
+      narration: narrationText,
+      speaker: isAntonio ? 'Antônio' : 'Thalita',
+      voice: isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural',
+      imageQuery: sc.imageQuery || cleanTopic,
+      fallbackThemeQuery: sc.fallbackThemeQuery || `${cleanTopic} photo`,
+      directImageUrl: idx === 0 ? wikiImage : null,
+      sceneLabel: sc.sceneLabel || `${idx + 1}/7 • ${cleanTopic}`,
+      isCommentBaitScene: idx === curated.scenes.length - 1
+    };
+  });
 
   builtScenes.push({
     narration: `Se você curte descobrir fatos curiosos reais e cheios de informação como esse sobre ${cleanTopic}, já segue aqui o perfil para não perder o próximo vídeo! ${loopBridge.endText}`,
+    speaker: 'Thalita',
+    voice: 'pt-BR-ThalitaMultilingualNeural',
     imageQuery: curated.scenes[0]?.imageQuery || cleanTopic,
     fallbackThemeQuery: curated.scenes[0]?.fallbackThemeQuery || cleanTopic,
     sceneLabel: `7/7 • ${cleanTopic}`,
@@ -504,7 +525,7 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
   });
 
   const finalScenes = durationMode === 'short'
-    ? [builtScenes[0], builtScenes[1], builtScenes[2], builtScenes[6]]
+    ? [builtScenes[0], builtScenes[1], builtScenes[2], builtScenes[builtScenes.length - 1]]
     : builtScenes;
 
   const topicTag = '#' + cleanTopic.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -630,37 +651,49 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   const allScenes = [
     {
       narration: `${chosenLoopBridge.startText} ${f1}`,
+      speaker: 'Thalita',
+      voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} real photo`,
       directImageUrl: wikiFact.wikiImage || null,
       sceneLabel: `1/7 • ${cleanTopic} (Fato Principal)`
     },
     {
-      narration: `${f2}`,
+      narration: `Sério? Mas como isso é possível? ${f2}`,
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} detail`,
       sceneLabel: `2/7 • Dados & Origem Real`
     },
     {
-      narration: `Além disso, olha só esse dado específico: ${f3}`,
+      narration: `Exatamente! E olha só esse dado específico: ${f3}`,
+      speaker: 'Thalita',
+      voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} close up`,
       sceneLabel: `3/7 • Como Funciona na Prática`
     },
     {
-      narration: `${f4}`,
+      narration: `Caramba! E os números são ainda mais impressionantes: ${f4}`,
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} nature science`,
       sceneLabel: `4/7 • Números e Proporções`
     },
     {
-      narration: `E tem mais um fato importante registrado sobre isso: ${f5}`,
+      narration: `Pois é! E tem mais um fato importante registrado sobre isso: ${f5}`,
+      speaker: 'Thalita',
+      voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} history archive`,
       sceneLabel: `5/7 • O Registro Comprovado`
     },
     {
-      narration: `${f6.replace(/\.*$/, '')}. E você, já conhecia esse fato sobre ${cleanTopic}? Comente sua opinião!`,
+      narration: `Inacreditável! ${f6.replace(/\.*$/, '')}. E você que tá assistindo, já conhecia esse fato? Comente sua opinião!`,
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} discovery`,
       sceneLabel: `6/7 • Conclusão Científica`,
@@ -668,6 +701,8 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
     },
     {
       narration: `Se você gosta de vídeos direto ao ponto com fatos reais como esse sobre ${cleanTopic}, já segue o perfil para não perder o próximo! ${chosenLoopBridge.endText}`,
+      speaker: 'Thalita',
+      voice: 'pt-BR-ThalitaMultilingualNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} photo`,
       sceneLabel: `7/7 • ${cleanTopic}`,
@@ -676,7 +711,7 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   ];
 
   const finalScenes = durationMode === 'short'
-    ? [allScenes[0], allScenes[1], allScenes[2], allScenes[6]]
+    ? [allScenes[0], allScenes[1], allScenes[2], allScenes[allScenes.length - 1]]
     : allScenes;
 
   return normalizeMetadata({
