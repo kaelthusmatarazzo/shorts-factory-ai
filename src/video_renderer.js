@@ -917,6 +917,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     id: jobId,
     filename: finalFilename,
     url: videoUrl,
+    localMp4Path: finalMp4Path,
     duration: Math.round(totalDuration),
     createdAt: new Date().toISOString()
   };
