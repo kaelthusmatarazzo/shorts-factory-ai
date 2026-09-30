@@ -77,12 +77,12 @@ app.post('/api/generate', async (req, res) => {
       // Automatic Telegram Upload & Sync
       try {
         const { sendVideoToTelegram, syncHistoryDatabaseToTelegram } = require('./src/telegram_storage');
-        const videoFilePath = path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : videoResult.url.replace(/^\/+/, '')));
-        if (fs.existsSync(videoFilePath)) {
-          const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
-          if (tgResult && tgResult.messageId) {
-            videoResult.telegram = tgResult;
-          }
+        const videoFilePath = (videoResult.localMp4Path && fs.existsSync(videoResult.localMp4Path))
+          ? videoResult.localMp4Path
+          : path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : (videoResult.url || '').replace(/^\/+/, '')));
+        const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
+        if (tgResult && tgResult.messageId) {
+          videoResult.telegram = tgResult;
         }
         await syncHistoryDatabaseToTelegram();
       } catch (tgErr) {
@@ -154,19 +154,20 @@ app.post('/api/generate', async (req, res) => {
       // Automatic Telegram Upload (Unlimited Cloud & Direct Phone Access)
       try {
         const { sendVideoToTelegram, syncHistoryDatabaseToTelegram } = require('./src/telegram_storage');
-        const videoFilePath = path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : videoResult.url.replace(/^\/+/, '')));
-        if (fs.existsSync(videoFilePath)) {
-          jobs.set(jobId, {
-            id: jobId,
-            status: 'running',
-            progress: 96,
-            message: 'Enviando vídeo para o seu Telegram (@Shofacbot)...'
-          });
-          const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
-          if (tgResult && tgResult.messageId) {
-            videoResult.telegram = tgResult;
-          }
+        const videoFilePath = (videoResult.localMp4Path && fs.existsSync(videoResult.localMp4Path))
+          ? videoResult.localMp4Path
+          : path.join(__dirname, 'public', (videoResult.filename ? `videos/${videoResult.filename}` : (videoResult.url || '').replace(/^\/+/, '')));
+        jobs.set(jobId, {
+          id: jobId,
+          status: 'running',
+          progress: 96,
+          message: 'Enviando vídeo para o seu Telegram (@Shofacbot)...'
+        });
+        const tgResult = await sendVideoToTelegram(videoResult, videoFilePath);
+        if (tgResult && tgResult.messageId) {
+          videoResult.telegram = tgResult;
         }
+        await syncHistoryDatabaseToTelegram();
       } catch (tgErr) {
         console.error('[Telegram Upload Error]', tgErr.message);
       }
