@@ -38,7 +38,7 @@ app.post('/api/new-script', async (req, res) => {
 
 // Start a 1-click Short generation job
 app.post('/api/generate', async (req, res) => {
-  const { niche = 'curiosidades', voice = 'duet-podcast', visualStyle = 'cinema', customTopic = '', durationMode = 'monetized', scriptOverride = null, excludeTopics = [] } = req.body || {};
+  const { niche = 'curiosidades', voice = 'duet-yara-nicolau', visualStyle = 'vibrant_pop', customTopic = '', durationMode = 'monetized', scriptOverride = null, excludeTopics = [] } = req.body || {};
   const safeExclude = Array.isArray(excludeTopics) ? excludeTopics : [];
   const jobId = `job_${Date.now()}`;
 
@@ -46,9 +46,9 @@ app.post('/api/generate', async (req, res) => {
     id: jobId,
     status: 'running',
     progress: 10,
-    message: (voice === 'duet-podcast')
-      ? 'Descobrindo fato curioso e criando roteiro Dueto Podcast (Thalita 👩 + Antônio 👨)...'
-      : 'Descobrindo fato curioso inédito e criando roteiro Studio 4.0...'
+    message: (voice === 'duet-yara-nicolau' || voice === 'duet-podcast')
+      ? 'Descobrindo fato curioso e criando roteiro Dueto Dinâmico (Yara 👩 + Nicolau 👨)...'
+      : 'Descobrindo fato curioso inédito e criando roteiro Studio Pop 4.0...'
   });
 
   // On Vercel Serverless, run synchronously inside the 60s request window so Lambda doesn't freeze before completion
@@ -120,8 +120,8 @@ app.post('/api/generate', async (req, res) => {
         id: jobId,
         status: 'running',
         progress: 20,
-        message: (voice === 'duet-podcast')
-          ? `Roteiro Dueto: "${scriptData.title}". Gravando vozes de Thalita 👩 + Antônio 👨...`
+        message: (voice === 'duet-yara-nicolau' || voice === 'duet-podcast')
+          ? `Roteiro Dueto: "${scriptData.title}". Gravando vozes de Yara 👩 + Nicolau 👨...`
           : `Roteiro inédito: "${scriptData.title}". Baixando 14 fotos reais em lote único...`
       });
 
