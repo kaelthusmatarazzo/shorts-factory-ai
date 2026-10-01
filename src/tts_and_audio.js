@@ -46,45 +46,119 @@ function prepareTextForHumanSpeech(rawText) {
   return s.replace(/\s+/g, ' ').trim();
 }
 
-// Synthesize speech in PT-BR with natural human prosody and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
-async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-ThalitaMultilingualNeural', sceneIndex = 0) {
+function loadElevenLabsConfig() {
+  const configFile = path.join(__dirname, '..', 'data', 'elevenlabs_config.json');
+  if (process.env.ELEVENLABS_API_KEY) {
+    return {
+      apiKey: process.env.ELEVENLABS_API_KEY.trim(),
+      voiceFemale: process.env.ELEVENLABS_VOICE_FEMALE || '21m00Tcm4TlvDq8ikWAM',
+      voiceMale: process.env.ELEVENLABS_VOICE_MALE || 'VR6AewLTigWG4xSOukaG'
+    };
+  }
+  if (fs.existsSync(configFile)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      if (cfg && cfg.apiKey) return cfg;
+    } catch (e) {}
+  }
+  return { apiKey: '', voiceFemale: '', voiceMale: '' };
+}
+
+// Synthesize speech in PT-BR with dynamic human prosody and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
+async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-YaraNeural', sceneIndex = 0) {
   const rawMp3Path = outputWavPath.replace(/\.wav$/, '_raw.mp3');
   let wordBoundaries = [];
   let generated = false;
   let usedEmergencyGoogle = false;
 
-  // Natural Human Prosody: 0% rate & 0Hz pitch preserves 100% of native vocal warmth, natural breathing and emotion!
+  // Modern Dynamic Prosody (+12% rate & +3Hz pitch for engaging, punchy Shorts pacing!)
   const baseProsodyByVoice = {
+    'pt-BR-YaraNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' }
+    ],
+    'pt-BR-NicolauNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' }
+    ],
+    'pt-BR-BrendaNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+14%', pitch: '+4Hz' }
+    ],
+    'pt-BR-DonatoNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+3Hz' }
+    ],
     'pt-BR-ThalitaMultilingualNeural': [
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+1%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+1%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' }
+      { rate: '+10%', pitch: '+2Hz' }
     ],
     'pt-BR-AntonioNeural': [
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+1%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+1%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' },
-      { rate: '+0%', pitch: '+0Hz' }
+      { rate: '+10%', pitch: '+2Hz' }
     ],
-    'pt-BR-FabioNeural': [{ rate: '+0%', pitch: '+0Hz' }],
-    'pt-BR-FranciscaNeural': [{ rate: '+0%', pitch: '+0Hz' }],
-    'en-US-AvaMultilingualNeural': [{ rate: '+0%', pitch: '+0Hz' }],
-    'en-US-EmmaMultilingualNeural': [{ rate: '+0%', pitch: '+0Hz' }]
+    'pt-BR-FabioNeural': [{ rate: '+10%', pitch: '+2Hz' }],
+    'pt-BR-FranciscaNeural': [{ rate: '+10%', pitch: '+2Hz' }],
+    'en-US-AvaMultilingualNeural': [{ rate: '+10%', pitch: '+2Hz' }],
+    'en-US-EmmaMultilingualNeural': [{ rate: '+10%', pitch: '+2Hz' }]
   };
 
-  const isMale = (voiceName.includes('Antonio') || voiceName.includes('Fabio'));
+  const isMale = (voiceName.includes('Nicolau') || voiceName.includes('Antonio') || voiceName.includes('Fabio') || voiceName.includes('Donato') || (voiceName.includes('male') && !voiceName.includes('female')));
   const fallbackNeuralVoice = isMale
-    ? (voiceName.includes('Fabio') ? 'pt-BR-AntonioNeural' : 'pt-BR-FabioNeural')
-    : (voiceName.includes('Francisca') ? 'pt-BR-ThalitaMultilingualNeural' : 'pt-BR-FranciscaNeural');
+    ? (voiceName.includes('Nicolau') ? 'pt-BR-AntonioNeural' : 'pt-BR-NicolauNeural')
+    : (voiceName.includes('Yara') ? 'pt-BR-FranciscaNeural' : 'pt-BR-YaraNeural');
 
   const spokenText = prepareTextForHumanSpeech(text);
+
+  // 1. Optional ElevenLabs Studio Human Voice Check
+  const elevenConfig = loadElevenLabsConfig();
+  const useElevenLabs = (voiceName === 'elevenlabs' || (elevenConfig.apiKey && (voiceName || '').startsWith('elevenlabs')));
+
+  if (useElevenLabs && elevenConfig.apiKey) {
+    try {
+      const voiceId = (isMale ? elevenConfig.voiceMale : elevenConfig.voiceFemale) || '21m00Tcm4TlvDq8ikWAM';
+      const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': elevenConfig.apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
+        body: JSON.stringify({
+          text: spokenText,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.8 }
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (elRes.ok) {
+        const audioBuf = Buffer.from(await elRes.arrayBuffer());
+        if (audioBuf.length > 1000) {
+          fs.writeFileSync(rawMp3Path, audioBuf);
+          generated = true;
+          const words = spokenText.split(/\s+/).filter(Boolean);
+          let currOff = 0;
+          wordBoundaries = words.map(w => {
+            const wDur = Math.max(0.16, (w.length / 5) * 0.28);
+            const item = { word: w, offsetSec: currOff, durationSec: wDur };
+            currOff += wDur + 0.04;
+            return item;
+          });
+          console.log(`🎙️ [ElevenLabs Cena ${sceneIndex + 1}] Áudio gerado com sucesso!`);
+        }
+      }
+    } catch (elErr) {
+      console.log(`⚠️ [ElevenLabs Cena ${sceneIndex + 1}] Falha (${elErr.message}), usando Edge TTS neural...`);
+    }
+  }
 
   async function tryEdgeSynthesis(targetVoice) {
     const tts = new MsEdgeTTS();
@@ -95,8 +169,8 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
       new Promise((_, rej) => setTimeout(() => rej(new Error('Edge TTS metadata timeout')), 8000))
     ]);
 
-    const voiceCurve = baseProsodyByVoice[targetVoice] || (isMale ? baseProsodyByVoice['pt-BR-AntonioNeural'] : baseProsodyByVoice['pt-BR-ThalitaMultilingualNeural']);
-    const prosodyOptions = voiceCurve[sceneIndex % voiceCurve.length] || { rate: '+0%', pitch: '+0Hz' };
+    const voiceCurve = baseProsodyByVoice[targetVoice] || (isMale ? baseProsodyByVoice['pt-BR-NicolauNeural'] : baseProsodyByVoice['pt-BR-YaraNeural']);
+    const prosodyOptions = (voiceCurve && voiceCurve[sceneIndex % voiceCurve.length]) || { rate: '+12%', pitch: '+3Hz' };
     const { audioStream, metadataStream } = tts.toStream(spokenText, prosodyOptions);
     const localWb = [];
 
@@ -155,24 +229,29 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
     return localWb;
   }
 
-  // 1. Primary Neural Voice Attempt
-  try {
-    wordBoundaries = await tryEdgeSynthesis(voiceName);
-    generated = true;
-    console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Edge TTS primário OK (${voiceName}) - ${wordBoundaries.length} palavras`);
-  } catch (err1) {
-    console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Primário ${voiceName} falhou (${err1.message}). Tentando fallback neural ${fallbackNeuralVoice}...`);
-    // 2. Secondary Neural Voice Fallback (preserves male/female duet integrity!)
+  // 2. Primary Neural Voice Attempt (Edge TTS)
+  if (!generated) {
+    const targetVoice = (voiceName === 'elevenlabs' || !voiceName.startsWith('pt-') && !voiceName.startsWith('en-'))
+      ? (isMale ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural')
+      : voiceName;
     try {
-      wordBoundaries = await tryEdgeSynthesis(fallbackNeuralVoice);
+      wordBoundaries = await tryEdgeSynthesis(targetVoice);
       generated = true;
-      console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Fallback neural OK (${fallbackNeuralVoice}) - ${wordBoundaries.length} palavras`);
-    } catch (err2) {
-      console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Fallback neural também falhou (${err2.message}).`);
+      console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Edge TTS primário OK (${targetVoice}) - ${wordBoundaries.length} palavras`);
+    } catch (err1) {
+      console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Primário ${targetVoice} falhou (${err1.message}). Tentando fallback neural ${fallbackNeuralVoice}...`);
+      // 3. Secondary Neural Voice Fallback
+      try {
+        wordBoundaries = await tryEdgeSynthesis(fallbackNeuralVoice);
+        generated = true;
+        console.log(`🎙️ [TTS Cena ${sceneIndex + 1}] Fallback neural OK (${fallbackNeuralVoice}) - ${wordBoundaries.length} palavras`);
+      } catch (err2) {
+        console.log(`⚠️ [TTS Cena ${sceneIndex + 1}] Fallback neural também falhou (${err2.message}).`);
+      }
     }
   }
 
-  // 3. Emergency Fallback: Google TTS (only if both Microsoft Neural voices were unreachable)
+  // 4. Emergency Fallback: Google TTS (only if both Microsoft Neural voices were unreachable)
   if (!generated || !fs.existsSync(rawMp3Path) || fs.statSync(rawMp3Path).size <= 500) {
     try {
       const encoded = encodeURIComponent(text.slice(0, 200));
@@ -331,27 +410,30 @@ function injectMysteryPingSFX(left, right, pingSample, sampleRate, freq = 1108.7
   }
 }
 
-function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', sceneStartTimes = [], midCutTimes = [], wordTriggerEvents = []) {
+function generateBackgroundMusicWav(outputPath, durationSec, mood = 'upbeat_pop', sceneStartTimes = [], midCutTimes = [], wordTriggerEvents = []) {
   const sampleRate = 44100;
   const totalSamples = Math.floor((durationSec + 0.5) * sampleRate);
   const left = new Float32Array(totalSamples);
   const right = new Float32Array(totalSamples);
 
   const chordSets = {
+    // 🟡 UPBEAT POP / VIBRANT (126 BPM, Bright Uplifting C-Major/A-Minor Pop Melodic Progression)
+    upbeat_pop: { freqs: [261.63, 329.63, 392.00, 523.25], bpm: 126, lfoHz: 0.35, subGain: 0.22, arpMult: 3.0, isUpbeat: true },
+    upbeat: { freqs: [261.63, 329.63, 392.00, 523.25], bpm: 126, lfoHz: 0.35, subGain: 0.22, arpMult: 3.0, isUpbeat: true },
+    vibrant_pop: { freqs: [261.63, 329.63, 392.00, 523.25], bpm: 126, lfoHz: 0.35, subGain: 0.22, arpMult: 3.0, isUpbeat: true },
     // 🔴 DANGER (Oppenheimer / Chernobyl D-Minor Phrygian Tension)
-    danger: { freqs: [146.83, 155.56, 220.00, 293.66], bpm: 144, lfoHz: 0.45, subGain: 0.40, arpMult: 2.0 },
+    danger: { freqs: [146.83, 155.56, 220.00, 293.66], bpm: 144, lfoHz: 0.45, subGain: 0.40, arpMult: 2.0, isUpbeat: false },
     // 🔵 COSMIC (Interstellar C# Minor 9th Deep Space / Ocean Abyss)
-    cosmic: { freqs: [138.59, 164.81, 207.65, 311.13], bpm: 126, lfoHz: 0.22, subGain: 0.34, arpMult: 2.0 },
+    cosmic: { freqs: [138.59, 164.81, 207.65, 311.13], bpm: 126, lfoHz: 0.22, subGain: 0.34, arpMult: 2.0, isUpbeat: false },
     // 🟢 EMERALD (BBC Planet Earth F-Minor / Lydian Organic Wonder)
-    emerald: { freqs: [174.61, 207.65, 261.63, 349.23], bpm: 120, lfoHz: 0.28, subGain: 0.30, arpMult: 3.0 },
+    emerald: { freqs: [174.61, 207.65, 261.63, 349.23], bpm: 120, lfoHz: 0.28, subGain: 0.30, arpMult: 3.0, isUpbeat: false },
     // 🟡 GOLD (Ancient History / Archaeological E-Harmonic Minor Mystery)
-    gold: { freqs: [164.81, 196.00, 246.94, 311.13], bpm: 128, lfoHz: 0.30, subGain: 0.34, arpMult: 2.0 },
-    dark: { freqs: [138.59, 164.81, 207.65, 277.18], bpm: 132, lfoHz: 0.25, subGain: 0.34, arpMult: 2.0 }
+    gold: { freqs: [164.81, 196.00, 246.94, 311.13], bpm: 128, lfoHz: 0.30, subGain: 0.34, arpMult: 2.0, isUpbeat: false },
+    dark: { freqs: [261.63, 329.63, 392.00, 523.25], bpm: 126, lfoHz: 0.35, subGain: 0.22, arpMult: 3.0, isUpbeat: true }
   };
 
-  const preset = chordSets[mood] || chordSets.cosmic;
+  const preset = chordSets[mood] || chordSets.upbeat_pop;
   const freqs = preset.freqs;
-  const subFreq = freqs[0] / 4;
   const beatDur = 60 / preset.bpm;
 
   for (let i = 0; i < totalSamples; i++) {
@@ -360,138 +442,83 @@ function generateBackgroundMusicWav(outputPath, durationSec, mood = 'dark', scen
     const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * preset.lfoHz * t);
     let pad = 0;
     for (let k = 0; k < freqs.length; k++) {
-      pad += Math.sin(2 * Math.PI * freqs[k] * t) * 0.10;
+      pad += Math.sin(2 * Math.PI * freqs[k] * t) * 0.07;
     }
 
-    const beatPos = (t % (beatDur * 2)) / (beatDur * 2);
-    const subEnv = Math.exp(-beatPos * 4.0);
-    const sub = Math.sin(2 * Math.PI * subFreq * t) * subEnv * (preset.subGain * 0.65);
+    if (preset.isUpbeat) {
+      // Lively Dynamic Pop Beat: Punchy kick on 1 & 3, crisp snare/clap on 2 & 4, bright melodic synth plucks
+      const beatProgress = (t % beatDur) / beatDur;
+      const beatIndex = Math.floor(t / beatDur) % 4;
 
-    const arpIdx = Math.floor(t / (beatDur / 2)) % freqs.length;
-    const arpPos = (t % (beatDur / 2)) / (beatDur / 2);
-    const arpEnv = Math.exp(-arpPos * 8.0);
-    const arp = Math.sin(2 * Math.PI * freqs[arpIdx] * t) * arpEnv * 0.025;
+      let kick = 0;
+      if (beatIndex === 0 || beatIndex === 2) {
+        const kickEnv = Math.exp(-beatProgress * 22);
+        const kickFreq = 52 + 85 * Math.exp(-beatProgress * 30);
+        kick = Math.sin(2 * Math.PI * kickFreq * beatProgress * beatDur) * kickEnv * 0.32;
+      }
 
-    let masterEnv = 1.0;
-    if (t < 0.25) masterEnv = t / 0.25;
-    if (t > durationSec - 0.5) masterEnv = Math.max(0, (durationSec - t) / 0.5);
+      let snare = 0;
+      if (beatIndex === 1 || beatIndex === 3) {
+        const snareEnv = Math.exp(-beatProgress * 16);
+        const snareNoise = (Math.random() * 2 - 1) * 0.14;
+        const snareTone = Math.sin(2 * Math.PI * 190 * beatProgress * beatDur) * 0.09;
+        snare = (snareNoise + snareTone) * snareEnv;
+      }
 
-    left[i] = (pad * (0.7 + 0.3 * lfo) + sub + arp) * masterEnv;
-    right[i] = (pad * (1.0 - 0.3 * lfo) + sub + arp) * masterEnv;
+      // Fast, animated melodic arpeggio
+      const arpIdx = Math.floor(t / (beatDur / 4)) % freqs.length;
+      const arpPos = (t % (beatDur / 4)) / (beatDur / 4);
+      const arpEnv = Math.exp(-arpPos * 9.5);
+      const arp = Math.sin(2 * Math.PI * freqs[arpIdx] * 2 * t) * arpEnv * 0.038;
+
+      let masterEnv = 1.0;
+      if (t < 0.25) masterEnv = t / 0.25;
+      if (t > durationSec - 0.5) masterEnv = Math.max(0, (durationSec - t) / 0.5);
+
+      left[i] = (pad * (0.7 + 0.3 * lfo) + kick + snare + arp) * masterEnv;
+      right[i] = (pad * (1.0 - 0.3 * lfo) + kick + snare + arp) * masterEnv;
+    } else {
+      const subFreq = freqs[0] / 4;
+      const beatPos = (t % (beatDur * 2)) / (beatDur * 2);
+      const subEnv = Math.exp(-beatPos * 4.0);
+      const sub = Math.sin(2 * Math.PI * subFreq * t) * subEnv * (preset.subGain * 0.65);
+
+      const arpIdx = Math.floor(t / (beatDur / 2)) % freqs.length;
+      const arpPos = (t % (beatDur / 2)) / (beatDur / 2);
+      const arpEnv = Math.exp(-arpPos * 8.0);
+      const arp = Math.sin(2 * Math.PI * freqs[arpIdx] * t) * arpEnv * 0.025;
+
+      let masterEnv = 1.0;
+      if (t < 0.25) masterEnv = t / 0.25;
+      if (t > durationSec - 0.5) masterEnv = Math.max(0, (durationSec - t) / 0.5);
+
+      left[i] = (pad * (0.7 + 0.3 * lfo) + sub + arp) * masterEnv;
+      right[i] = (pad * (1.0 - 0.3 * lfo) + sub + arp) * masterEnv;
+    }
   }
 
-  // 0:00 Scroll-Stopping Hook Sub-Bass Impact + Shutter
+  // Hook Sub-Bass Impact + Shutter at 0:00
   injectWhooshAndShutterSFX(left, right, Math.floor(0.05 * sampleRate), sampleRate);
-  injectBassBoomSFX(left, right, Math.floor(0.02 * sampleRate), sampleRate, 1.05);
+  injectBassBoomSFX(left, right, Math.floor(0.02 * sampleRate), sampleRate, 0.70);
 
-  // Helper: Double Heartbeat ("LUB-DUB" 55Hz/68Hz) + Submarine Sonar Ping (1320Hz) for Scene 3 (~20s) & Scene 5 (~42s) Re-Hooks
-  const injectHeartbeatSonarRehookSFX = (startPos) => {
-    const pulses = [
-      { offsetSec: 0.00, freq: 55, dur: 0.16, gain: 0.55 },
-      { offsetSec: 0.22, freq: 68, dur: 0.14, gain: 0.45 },
-      { offsetSec: 0.85, freq: 55, dur: 0.16, gain: 0.50 },
-      { offsetSec: 1.07, freq: 68, dur: 0.14, gain: 0.40 }
-    ];
-    for (const p of pulses) {
-      const pStart = startPos + Math.floor(p.offsetSec * sampleRate);
-      const pLen = Math.floor(p.dur * sampleRate);
-      for (let k = 0; k < pLen && (pStart + k) < totalSamples; k++) {
-        const tau = k / sampleRate;
-        const env = Math.sin(Math.PI * (k / pLen)) * Math.exp(-tau * 12);
-        const thump = Math.sin(2 * Math.PI * p.freq * tau) * p.gain * env;
-        left[pStart + k] += thump;
-        right[pStart + k] += thump;
-      }
-    }
-    // Submarine Sonar Alert Ping (1320Hz crystal resonance)
-    const sonarStart = startPos + Math.floor(0.10 * sampleRate);
-    const sonarLen = Math.floor(0.55 * sampleRate);
-    for (let k = 0; k < sonarLen && (sonarStart + k) < totalSamples; k++) {
-      const tau = k / sampleRate;
-      const env = Math.exp(-tau * 6.5);
-      const ping = Math.sin(2 * Math.PI * 1320 * tau) * 0.18 * env;
-      left[sonarStart + k] += ping * 0.9;
-      right[sonarStart + k] += ping * 1.1;
-    }
-  };
-
-  // UPGRADE #5A: Stereo Mechanical Clock Tick-Tock during Climax Scenes (Scene 3 & Scene 4)
-  if (sceneStartTimes.length >= 4) {
-    const tickStartSec = sceneStartTimes[2];
-    const tickEndSec = sceneStartTimes[4] || (tickStartSec + 12.0);
-    const tickInterval = 0.25; // 4 ticks per second (240 BPM urgency)
-    let tickIdx = 0;
-    for (let tSec = tickStartSec; tSec < tickEndSec; tSec += tickInterval) {
-      const tickSample = Math.floor(tSec * sampleRate);
-      const clickDurSamples = Math.floor(0.018 * sampleRate);
-      const isTick = (tickIdx % 2 === 0);
-      const tickFreq = isTick ? 2650 : 1950;
-      const panL = isTick ? 0.85 : 0.35;
-      const panR = isTick ? 0.35 : 0.85;
-      for (let k = 0; k < clickDurSamples && (tickSample + k) < totalSamples; k++) {
-        const tau = k / sampleRate;
-        const env = Math.exp(-tau * 260);
-        const clickVal = (Math.sin(2 * Math.PI * tickFreq * tau) + (Math.random() * 2 - 1) * 0.4) * env * 0.20;
-        left[tickSample + k] += clickVal * panL;
-        right[tickSample + k] += clickVal * panR;
-      }
-      tickIdx++;
-    }
-  }
-
-  // UPGRADE #5B: Word-Triggered Suspense Risers (before numbers) & Sub-Bass Drops (on shock/danger words)
-  const injectSuspenseRiserSFX = (targetWordSample) => {
-    const riserDur = 0.55;
-    const riserSamples = Math.floor(riserDur * sampleRate);
-    const startIdx = Math.max(0, targetWordSample - riserSamples);
-    let phase = 0;
-    for (let k = 0; k < riserSamples && (startIdx + k) < totalSamples; k++) {
-      const progress = k / riserSamples;
-      const freq = 190 + 780 * (progress * progress);
-      phase += (2 * Math.PI * freq) / sampleRate;
-      const env = Math.pow(progress, 1.8) * (1 - Math.pow(progress, 12));
-      const val = Math.sin(phase) * env * 0.19;
-      left[startIdx + k] += val * (1 - progress * 0.4);
-      right[startIdx + k] += val * (0.6 + progress * 0.4);
-    }
-  };
-
-  for (const ev of wordTriggerEvents) {
-    const evSample = Math.floor((ev.timeSec || 0) * sampleRate);
-    if (evSample <= sampleRate * 0.3 || evSample >= totalSamples - sampleRate * 0.3) continue;
-    if (ev.type === 'gold_number') {
-      injectSuspenseRiserSFX(evSample);
-      injectBassBoomSFX(left, right, evSample, sampleRate, 0.48);
-    } else if (ev.type === 'danger_shock') {
-      injectBassBoomSFX(left, right, evSample, sampleRate, 0.52);
-    }
-  }
-
+  // Scene Transitions: Whoosh & Shutter
   for (let idx = 0; idx < sceneStartTimes.length; idx++) {
     const startSec = sceneStartTimes[idx];
     const samplePos = Math.floor(startSec * sampleRate);
-
     if (idx > 0) {
       injectWhooshAndShutterSFX(left, right, samplePos, sampleRate);
     }
-
-    // UPGRADE #4: Anti-Drop Re-Hook Heartbeat + Sonar at Scene 3 (idx===2, ~20s) and Scene 5 (idx===4, ~42s)
-    if (idx === 2 || idx === 4) {
-      injectHeartbeatSonarRehookSFX(samplePos);
-    }
-
-    const pingSample = Math.floor((startSec + 1.8) * sampleRate);
+    const pingSample = Math.floor((startSec + 1.2) * sampleRate);
     if (pingSample < totalSamples - sampleRate) {
-      injectMysteryPingSFX(left, right, pingSample, sampleRate, freqs[idx % freqs.length] * 4);
+      injectMysteryPingSFX(left, right, pingSample, sampleRate, freqs[idx % freqs.length] * 2);
     }
   }
 
-  // Mid-Scene 3.5s Visual Cut SFX (Sub-Cut A -> Sub-Cut B whoosh + shutter + subtle low punch)
+  // Mid-Cut 3.5s Snappy Visual Transitions
   for (const midSec of midCutTimes) {
     const midSample = Math.floor(midSec * sampleRate);
     if (midSample > sampleRate && midSample < totalSamples - sampleRate) {
       injectWhooshAndShutterSFX(left, right, midSample, sampleRate);
-      injectMysteryPingSFX(left, right, midSample, sampleRate, freqs[2] * 3);
     }
   }
 
