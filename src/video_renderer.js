@@ -44,8 +44,15 @@ function renderCenteredVectorPath(rawText, centerX, baselineY, targetFontSize, m
   return `<path d="${d}" fill="${fill}"/>`;
 }
 
-function getAtmospherePalette(colorTheme = 'cosmic') {
+function getAtmospherePalette(colorTheme = 'vibrant_pop') {
   const palettes = {
+    vibrant_pop: {
+      pillFill: '#FFE500',
+      pillText: '#000000',
+      accent: '#00F0FF',
+      dataColor: '#00F5D4',
+      glowColor: '#FF007F'
+    },
     danger: {
       pillFill: '#FF2A54',
       pillText: '#FFFFFF',
@@ -75,35 +82,35 @@ function getAtmospherePalette(colorTheme = 'cosmic') {
       glowColor: '#00E5FF'
     }
   };
-  return palettes[colorTheme] || palettes.cosmic;
+  return palettes[colorTheme] || palettes.vibrant_pop;
 }
 
 function getTensionPhaseInfo(sceneIdx = 0, totalScenes = 7) {
   if (sceneIdx >= totalScenes - 1 && totalScenes >= 2) {
-    return { label: 'CONEXAO INFINITA', dotColor: '#00F0FF', borderColor: '#00F0FF' };
+    return { label: 'CAPÍTULO FINAL • CONCLUSÃO', dotColor: '#00F0FF', borderColor: '#00F0FF' };
   }
   if (sceneIdx >= 4) {
-    return { label: 'FASE 3 • LIMITE EXTREMO', dotColor: '#FF2A54', borderColor: '#FF2A54' };
+    return { label: 'CAPÍTULO 3 • REVELAÇÃO', dotColor: '#FF007F', borderColor: '#FF007F' };
   }
   if (sceneIdx >= 2) {
-    return { label: 'FASE 2 • DADOS REAIS', dotColor: '#FFD700', borderColor: '#FFD700' };
+    return { label: 'CAPÍTULO 2 • DESCOBERTA', dotColor: '#FFE500', borderColor: '#FFE500' };
   }
-  return { label: 'FASE 1 • A DESCOBERTA', dotColor: '#00E676', borderColor: '#00E676' };
+  return { label: 'CAPÍTULO 1 • O INÍCIO', dotColor: '#00F0FF', borderColor: '#00F0FF' };
 }
 
-// UPGRADE #2 & #5: 3-Color Psychological Semantic Classifier (syncs Visual Pill Color + Audio Word-Triggered SFX!)
+// 3-Color Dynamic Pop Semantic Classifier (Vibrant Pop Yellow + Electric Pink + Electric Cyan)
 function classifySemanticWordStyle(wordText) {
   const w = String(wordText || '').toLowerCase();
-  // 🟡 GOLD_NUMBER: Numbers, percentages, extreme magnitudes, and dates
+  // 🟡 POP_NUMBER: Numbers, percentages, extreme magnitudes, and dates
   if (/\d|%|km|metros|quilôm|graus|°c|bilh|milh|trilh|mil\b|tonelad|século|anos|dobro|triplo|zero|infinit/i.test(w)) {
-    return { pillFill: '#FFD700', pillText: '#05050A', scaleMult: 1.18, sfxType: 'gold_number' };
+    return { pillFill: '#FFE500', pillText: '#000000', scaleMult: 1.18, sfxType: 'gold_number' };
   }
-  // 🔴 DANGER_SHOCK: Danger, secrecy, death, impossibility, shock
+  // 🔴 POP_ACTION: Shock, curiosity, discovery words
   if (/secret|proibid|morte|mort|derret|imposs|erro|medo|terror|explod|explos|abismo|inferno|sangue|veneno|fatal|extin|destru|jamais|nunca|choque|chocant|bizarro|assustador|perigo|maldi|mistéri|ocult|escondid|pânico|violav/i.test(w)) {
-    return { pillFill: '#FF2A54', pillText: '#FFFFFF', scaleMult: 1.16, sfxType: 'danger_shock' };
+    return { pillFill: '#FF007F', pillText: '#FFFFFF', scaleMult: 1.16, sfxType: 'danger_shock' };
   }
-  // 🟢 NEON_DEFAULT: Electric Cyan active pill
-  return { pillFill: '#00F5D4', pillText: '#05050A', scaleMult: 1.12, sfxType: null };
+  // 🟢 ELECTRIC CYAN DEFAULT
+  return { pillFill: '#00F0FF', pillText: '#000000', scaleMult: 1.12, sfxType: null };
 }
 
 function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610, palette = null) {
@@ -441,15 +448,15 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
           .resize(punchW, punchH, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
           .extract({ left, top, width: OVERSCAN_W, height: OVERSCAN_H })
           .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
-          .modulate({ brightness: 0.98, saturation: 1.20 })
+          .modulate({ brightness: 1.05, saturation: 1.22 })
           .jpeg({ quality: 80 })
           .toBuffer();
       } else {
-        // Shot A: Wide / Medium Framing with rich cinematic grading
+        // Shot A: Wide / Medium Framing with rich vibrant grading
         return await sharp(bestImgBuf)
           .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
           .sharpen({ sigma: 1.10, m1: 0.8, m2: 1.6 })
-          .modulate({ brightness: 0.98, saturation: 1.16 })
+          .modulate({ brightness: 1.04, saturation: 1.18 })
           .jpeg({ quality: 80 })
           .toBuffer();
       }
@@ -654,20 +661,20 @@ async function preparePrebakedShot(photoBuffer, palette, speakerInfo = null, top
   const staticHudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="topVignette" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#020308" stop-opacity="0.75"/>
-        <stop offset="60%" stop-color="#020308" stop-opacity="0.25"/>
+        <stop offset="0%" stop-color="#020308" stop-opacity="0.65"/>
+        <stop offset="60%" stop-color="#020308" stop-opacity="0.20"/>
         <stop offset="100%" stop-color="#000000" stop-opacity="0.00"/>
       </linearGradient>
       <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#000000" stop-opacity="0.00"/>
-        <stop offset="35%" stop-color="#020308" stop-opacity="0.50"/>
-        <stop offset="100%" stop-color="#03050c" stop-opacity="0.92"/>
+        <stop offset="40%" stop-color="#000000" stop-opacity="0.20"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0.52"/>
       </linearGradient>
     </defs>
     <!-- Top Cinema Vignette (Protects HUD & Host Badges) -->
-    <rect width="${WIDTH}" height="160" fill="url(#topVignette)"/>
-    <!-- Bottom Cinema Vignette (Ensures 100% Subtitle Contrast) -->
-    <rect y="670" width="${WIDTH}" height="610" fill="url(#bottomVignette)"/>
+    <rect width="${WIDTH}" height="140" fill="url(#topVignette)"/>
+    <!-- Bottom Vibrant Subtitle Vignette (Keeps Photo Bright & Luminous) -->
+    <rect y="790" width="${WIDTH}" height="490" fill="url(#bottomVignette)"/>
     ${categoryBadgeSvg}
     ${speakerBadgeSvg}
   </svg>`;
@@ -758,15 +765,15 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   delete require.cache[require.resolve('./tts_and_audio')];
   const { synthesizeSpeechWithTimings, generateBackgroundMusicWav: genBgm } = require('./tts_and_audio');
 
-  const voiceName = options.voice || 'duet-podcast';
-  const isDuetPodcast = (voiceName === 'duet-podcast');
+  const voiceName = options.voice || 'duet-yara-nicolau';
+  const isDuetPodcast = (voiceName === 'duet-podcast' || voiceName === 'duet-yara-nicolau');
   const scenes = scriptData.scenes || [];
-  const colorTheme = scriptData.colorTheme || 'cosmic';
+  const colorTheme = options.visualStyle === 'vibrant_pop' ? 'vibrant_pop' : (scriptData.colorTheme || 'vibrant_pop');
   const palette = getAtmospherePalette(colorTheme);
 
   onProgress(15, isDuetPodcast
-    ? 'Dueto Podcast: Gravando Thalita 👩 + Antônio 👨 + Buscando 14 Fotos Web HD...'
-    : 'Studio 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
+    ? 'Dueto Dinâmico: Gravando Yara 👩 + Nicolau 👨 + Buscando 14 Fotos Web HD...'
+    : 'Studio Pop 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
@@ -775,11 +782,11 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   // 1. Ultra-Fast Parallel Neural Voice Synthesis (All scenes synthesize concurrently in < 1.5s total!)
   const ttsJobsPromise = Promise.all(scenes.map(async (s, sceneIdx) => {
     const audioWavPath = path.join(tmpDir, `scene_${sceneIdx}.wav`);
-    let sceneVoice = voiceName;
-    if (isDuetPodcast) {
+    let sceneVoice = s.voice || voiceName;
+    if (voiceName === 'duet-yara-nicolau') {
+      sceneVoice = (sceneIdx % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
+    } else if (voiceName === 'duet-podcast') {
       sceneVoice = (sceneIdx % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
-    } else if (sceneVoice === 'pt-BR-ThalitaMultilingualNeural') {
-      sceneVoice = 'pt-BR-FranciscaNeural';
     }
     const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, sceneIdx);
     return { audioWavPath, ttsResult, sceneVoice };
@@ -803,18 +810,19 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   ]);
 
   onProgress(52, isDuetPodcast
-    ? 'Dueto Sincronizado: Mixando Vozes de Thalita 👩 & Antônio 👨...'
+    ? 'Dueto Sincronizado: Mixando Vozes de Yara 👩 & Nicolau 👨...'
     : 'Sincronizando 14 Fotos Web HD + Efeitos por Palavra...');
 
   for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult, sceneVoice } = ttsResults[i];
     const { photoBufA, photoBufB } = scenePhotoBuffers[i];
-    const isAntonio = (sceneVoice && (sceneVoice.includes('Antonio') || sceneVoice.includes('Fabio'))) || (isDuetPodcast && (i % 2 === 1));
+    const isMale = (sceneVoice && (sceneVoice.includes('Nicolau') || sceneVoice.includes('Antonio') || sceneVoice.includes('Fabio') || sceneVoice.includes('Donato'))) || (isDuetPodcast && (i % 2 === 1));
+    const isNicolau = sceneVoice && sceneVoice.includes('Nicolau');
     const speakerInfo = isDuetPodcast ? {
-      name: isAntonio ? 'Antônio' : 'Thalita',
-      emoji: isAntonio ? '👨' : '👩',
-      color: isAntonio ? '#00f0ff' : '#ff2d55',
-      role: isAntonio ? 'Comentarista' : 'Apresentadora'
+      name: isNicolau ? 'Nicolau' : (isMale ? 'Antônio' : (sceneVoice.includes('Yara') ? 'Yara' : 'Thalita')),
+      emoji: isMale ? '👨' : '👩',
+      color: isMale ? '#00f0ff' : '#ff007f',
+      role: isMale ? 'Narrador' : 'Apresentadora'
     } : null;
 
     sceneStartTimes.push(totalDuration);
@@ -937,7 +945,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
     '-filter_complex',
-    `[1:a]highpass=f=65,acompressor=threshold=-19dB:ratio=2.0:attack=18:release=140:makeup=1.1,volume=1.06[voice];[2:a]lowpass=f=3500,volume=0.15[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
+    `[1:a]highpass=f=65,acompressor=threshold=-19dB:ratio=2.2:attack=18:release=140:makeup=1.1,volume=1.06[voice];[2:a]highpass=f=45,equalizer=f=2500:t=q:w=1.2:g=-2.0,volume=0.18[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
