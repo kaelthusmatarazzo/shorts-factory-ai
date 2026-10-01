@@ -345,22 +345,24 @@
           </select>
         </div>
         <div class="field">
-          <label>Narração Humana & Podcast (PT-BR)</label>
+          <label>Voz & Dublagem (+12% Ritmo Shorts)</label>
           <select id="voiceSelect">
-            <option value="duet-podcast" selected>🎙️🔥 Dueto Podcast Viral (Thalita 👩 + Antônio 👨 Interagindo)</option>
-            <option value="pt-BR-ThalitaMultilingualNeural">👩🎙️ Solo: Thalita Ultra-Realista (Humana / Documentário)</option>
-            <option value="en-US-AvaMultilingualNeural">👩🎙️ Solo: Ava Multilingual (Suave & Cinematográfica)</option>
-            <option value="en-US-EmmaMultilingualNeural">👩🎙️ Solo: Emma Multilingual (Jovem & Conversacional)</option>
-            <option value="pt-BR-FranciscaNeural">👩🎙️ Solo: Francisca (Dinâmica Clássica)</option>
-            <option value="pt-BR-AntonioNeural">👨🎙️ Solo: Antônio (Masculina Profunda)</option>
+            <option value="duet-yara-nicolau" selected>🎙️🔥 Dueto Dinâmico (Yara 👩 + Nicolau 👨 • Mais Expressivo & Viral)</option>
+            <option value="pt-BR-YaraNeural">👩✨ Solo: Yara (Jovem, Expressiva & Conversacional)</option>
+            <option value="pt-BR-NicolauNeural">👨⚡ Solo: Nicolau (Enérgico, Firme & Cativante)</option>
+            <option value="pt-BR-BrendaNeural">👩🌟 Solo: Brenda (Clara & Vibrante)</option>
+            <option value="pt-BR-DonatoNeural">👨🎙️ Solo: Donato (Storyteller Envolvente)</option>
+            <option value="elevenlabs">💎🎙️ ElevenLabs AI (Vozes de Estúdio Cinema)</option>
+            <option value="duet-podcast">🎙️ Dueto Clássico (Thalita 👩 + Antônio 👨)</option>
           </select>
         </div>
       </div>
 
       <div class="field custom-topic">
-        <label>Estilo Visual & Edição (Studio 3.0)</label>
+        <label>Estilo Visual & Trilha Sonora</label>
         <select id="visualStyleSelect">
-          <option value="cinema" selected>🎬 Studio 3.0: Cinema 9:16 + HUD de Tensão + Color Grading + Pílula Neon</option>
+          <option value="vibrant_pop" selected>✨ Studio Pop 4.0: Visual Vibrante & Menos Dark + Trilha Upbeat Dinâmica</option>
+          <option value="cinema">🎬 Studio Cinema: Tons Cinematográficos 9:16 + Color Grading</option>
           <option value="card">🖼️ Card Clássico: Moldura Central + Fundo Blur + 14 Cortes</option>
         </select>
       </div>
@@ -670,18 +672,18 @@
 
       const scenesContainer = document.getElementById('previewScriptScenes');
       const scenes = script.scenes || [];
-      const currentVoice = (document.getElementById('voiceSelect') && document.getElementById('voiceSelect').value) || 'duet-podcast';
-      const isDuet = (currentVoice === 'duet-podcast');
+      const currentVoice = (document.getElementById('voiceSelect') && document.getElementById('voiceSelect').value) || 'duet-yara-nicolau';
+      const isDuet = (currentVoice === 'duet-podcast' || currentVoice === 'duet-yara-nicolau');
 
       scenesContainer.innerHTML = scenes.map((s, idx) => {
-        const isAntonio = isDuet && (s.speaker === 'Antônio' || (idx % 2 === 1));
+        const isMale = isDuet && (s.speaker === 'Nicolau' || s.speaker === 'Antônio' || (idx % 2 === 1));
         const speakerTag = isDuet
-          ? (isAntonio ? '👨🎙️ ANTÔNIO (Voz Masculina • Reação / Números)' : '👩🎙️ THALITA (Voz Feminina • Apresentadora)')
+          ? (isMale ? '👨⚡ NICOLAU (Voz Masculina • Dinâmica & Reação)' : '👩✨ YARA (Voz Feminina • Narradora Principal)')
           : '🎙️ Fala da Narração (Voz Solo)';
         const cardBorder = isDuet
-          ? (isAntonio ? 'border:1px solid rgba(0,240,255,0.45); background:rgba(0,240,255,0.04);' : 'border:1px solid rgba(255,45,85,0.45); background:rgba(255,45,85,0.04);')
+          ? (isMale ? 'border:1px solid rgba(0,240,255,0.45); background:rgba(0,240,255,0.04);' : 'border:1px solid rgba(255,0,127,0.45); background:rgba(255,0,127,0.04);')
           : 'border:1px solid rgba(255,255,255,0.12); background:rgba(0,0,0,0.42);';
-        const speakerBadgeColor = isAntonio ? '#00f0ff' : '#ff6b81';
+        const speakerBadgeColor = isMale ? '#00f0ff' : '#ff007f';
 
         return `
         <div class="editor-scene-card" style="border-radius:10px; padding:10px; margin-bottom:8px; ${cardBorder}">
