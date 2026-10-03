@@ -66,6 +66,17 @@ function loadElevenLabsConfig() {
 
 // Synthesize speech in PT-BR with dynamic human prosody and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
 async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-YaraNeural', sceneIndex = 0) {
+  // Sanitize voiceName to guarantee a valid Edge TTS or ElevenLabs voice
+  let safeVoice = voiceName || 'pt-BR-YaraNeural';
+  if (safeVoice === 'duet-yara-nicolau' || safeVoice === 'duet') {
+    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
+  } else if (safeVoice === 'duet-podcast') {
+    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
+  } else if (!safeVoice.startsWith('pt-BR-') && !safeVoice.startsWith('en-US-') && safeVoice !== 'elevenlabs') {
+    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
+  }
+  voiceName = safeVoice;
+
   const rawMp3Path = outputWavPath.replace(/\.wav$/, '_raw.mp3');
   let wordBoundaries = [];
   let generated = false;
