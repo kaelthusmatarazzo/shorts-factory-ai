@@ -213,165 +213,196 @@ const SCIENTIFIC_DISAMBIGUATION_MAP = {
   'pando (árvore)': 'Populus tremuloides Pando tree Fishlake Utah',
   'pando': 'Populus tremuloides Pando tree Fishlake Utah',
   'europa (satélite)': 'Europa moon Jupiter NASA',
+  'europa': 'Europa moon Jupiter NASA',
   'titã (satélite)': 'Titan moon Saturn Cassini',
+  'titã': 'Titan moon Saturn Cassini',
+  'tita': 'Titan moon Saturn Cassini',
   'quimera (peixe)': 'Chimaera fish deep sea shark',
-  'pata de elefante (chernobyl)': 'Chernobyl nuclear power plant reactor',
+  'pata de elefante (chernobyl)': 'Chernobyl nuclear power plant Elephant Foot corium',
+  'pata de elefante': 'Chernobyl nuclear power plant Elephant Foot corium',
   'matusalém (árvore)': 'Pinus longaeva bristlecone pine White Mountains',
-  'rio fervente': 'Shanay-Timpishka boiling river thermal',
-  'olho do saara': 'Richat Structure Mauritania satellite',
-  'caverna dos cristais': 'Cave of the Crystals Naica selenite',
+  'matusalem': 'Pinus longaeva bristlecone pine White Mountains',
+  'rio fervente': 'Shanay-Timpishka boiling river thermal Amazon',
+  'olho do saara': 'Richat Structure Eye of the Sahara Mauritania satellite',
+  'caverna dos cristais': 'Cave of the Crystals Naica selenite Mexico',
   'relâmpago do catatumbo': 'Catatumbo lightning storm Venezuela',
+  'relampago do catatumbo': 'Catatumbo lightning storm Venezuela',
   'fossa das marianas': 'Mariana Trench Challenger Deep bathyscaphe',
-  'ilha da queimada grande': 'Bothrops insularis Ilha da Queimada Grande',
-  'poço superprofundo de kola': 'Kola Superdeep Borehole Russia'
+  'ilha da queimada grande': 'Bothrops insularis Ilha da Queimada Grande snake',
+  'poço superprofundo de kola': 'Kola Superdeep Borehole borehole cap Russia',
+  'poco superprofundo de kola': 'Kola Superdeep Borehole borehole cap Russia',
+  'cratera de darvaza': 'Darvaza gas crater door to hell Turkmenistan',
+  'porta para o inferno': 'Darvaza gas crater door to hell Turkmenistan',
+  'lago natron': 'Lake Natron Tanzania red water salt',
+  'tardigrada': 'Tardigrade water bear microscope',
+  'urso-d’água': 'Tardigrade water bear microscope',
+  'ophiocordyceps unilateralis': 'Ophiocordyceps unilateralis zombie ant fungus',
+  'turritopsis dohrnii': 'Turritopsis dohrnii immortal jellyfish ocean',
+  'silabário global de sementes de svalbard': 'Svalbard Global Seed Vault Arctic',
+  'svalbard': 'Svalbard Global Seed Vault Arctic',
+  'cofre do fim do mundo': 'Svalbard Global Seed Vault Arctic',
+  'cérebro de albert einstein': 'Albert Einstein brain Thomas Harvey',
+  'cerebro de albert einstein': 'Albert Einstein brain Thomas Harvey',
+  'ponto nemo': 'Point Nemo oceanic pole inaccessibility spacecraft cemetery',
+  'manuscrito voynich': 'Voynich manuscript illustrations parchment',
+  'cachoeira de sangue': 'Blood Falls Taylor Glacier Antarctica red iron oxide',
+  'aurora polar': 'Aurora borealis northern lights real photo night sky',
+  'aurora boreal': 'Aurora borealis northern lights real photo night sky',
+  'aurora austral': 'Aurora australis southern lights real photo night sky'
 };
 
-// Extract clean proper/scientific noun from scene imageQuery without generic English filler words
-function extractCleanEntityName(rawQuery, sourceTopic) {
-  const stopWords = /\b(photo|photography|science|nature|microscope|closeup|extreme|environment|history|world|research|technology|planet|earth|mystery|zombie|ant|snake|tree|coast|ocean|island|fire|night|daytime|desert|red|water|volcano|crust|mineral|lake|bird|moss|droplet|tun|state|electron|protein|shield|molecular|asteroid|impact|dinosaur|extinction|gas|vents|flames|mining|turquoise|acid|crater|miners|carrying|baskets|giant|crystals|scientists|cooling|suits|human|lungs|alveoli|medical|illustration|underground|flooded|cavern|spores|mandible|macro|rainforest|canopy|sunlight|leaf|biting|vein|fruiting|body|head|bolts|storm|cloud|mountains|clouds|cumulonimbus|anvil|atmosphere|ozone|space|white|bark|trunks|root|system|forest|aerial|autumn|gold|ancient|mountain|snow|golden|leaves|gear|fragment|x-ray|tomography|gears|reconstruction|model|solar|eclipse|astronomy|pages|botanical|text|script|plants|astronomical|diagram|rare|book|library|subglacial|sheet|radar|sea|ice|brine|iron|oxide|extremophile|bacteria|deep|abyssal|zone|fish|creature|bioluminescence|exploration|submarine|fishing|trawler|net|uranus|and|nasa|carbon|atom|diamond|structure|rough|uncut|diamonds|laser|planetary|core|portrait|historical|lecturing|brain|anatomy|glass|slides|mirror|hexagonal|cacti|stars|reflection|observation|satellite|orbit|lithium|evaporation|ponds|map|bathyscaphe|snailfish|hydrothermal|vent|floor|submersible|rock|needles|limestone|karst|pinnacles|suspension|bridge|lemur|canyon|below|beach|jungle|shipwreck|coral|reef|navy|guard|helicopter|low|tide|bay|of|bengal|sunset|nuclear|power|plant|sarcophagus|control|room|reactor|geiger|counter|radiation|dosimeter|abandoned|city|new|safe|confinement|arch|radioactive|sample|warriors|horses|chariots|warrior|face|mausoleum|first|mound|liquid|mercury|metal|droplets|museum|pit)\b/gi;
-  const cleaned = String(rawQuery || '')
-    .replace(stopWords, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (cleaned.length >= 4) return cleaned;
-  return String(sourceTopic || '').replace(/\s*\([^)]*\)/g, '').trim();
+function getDisambiguatedTopic(raw) {
+  const clean = String(raw || '').toLowerCase().trim();
+  const withoutParens = clean.replace(/\s*\([^)]*\)/g, '').trim();
+  const normalized = withoutParens.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const [k, v] of Object.entries(SCIENTIFIC_DISAMBIGUATION_MAP)) {
+    const kNorm = k.toLowerCase().replace(/\s*\([^)]*\)/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    if (kNorm === normalized || normalized.includes(kNorm) || kNorm.includes(normalized)) {
+      return v;
+    }
+  }
+  return '';
 }
 
-// IMPROVEMENT #1: Scientific Disambiguated Batch Photo Fetcher (Zero Homonyms!)
+// 100% Theme-Accurate Scene & Topic Photo Fetcher
 async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const scenes = scriptData.scenes || [];
   const fullSourceTopic = String(scriptData.sourceTopic || scriptData.title || 'Ciência').trim();
-  const topicLower = fullSourceTopic.toLowerCase();
-  const disambiguatedTerm = SCIENTIFIC_DISAMBIGUATION_MAP[topicLower]
-    || SCIENTIFIC_DISAMBIGUATION_MAP[topicLower.replace(/\s*\([^)]*\)/g, '').trim()]
-    || scriptData.wikiSearch
-    || '';
+  const disambiguatedTerm = getDisambiguatedTopic(fullSourceTopic) || scriptData.wikiSearch || '';
   const rawTopic = disambiguatedTerm || fullSourceTopic.replace(/\s*\([^)]*\)/g, '').trim();
 
-  let enTitleFull = '';
   let enTitleClean = '';
-  let heroUrl = scriptData.scenes?.[0]?.directImageUrl || null;
-  const pool = [];
-  const seenUrls = new Set();
-
+  const topicPool = [];
+  const sceneSpecificPools = scenes.map(() => []);
   const seenIds = new Set();
-  const addWebPhotoCandidate = (cdnUrl, murl = '') => {
+
+  const addTopicPhotoCandidate = (cdnUrl, murl = '') => {
     if (!cdnUrl) return;
     const checkStr = String(murl || '').toLowerCase();
-    // Block YouTube clickbait thumbnails, Pinterest, memes, slides, academic figures, maps, charts, and logos
     if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
 
     const oipMatch = cdnUrl.match(/OIP\.[a-zA-Z0-9_-]+/);
     const dedupKey = oipMatch ? oipMatch[0] : (murl || cdnUrl);
     if (seenIds.has(dedupKey)) return;
     seenIds.add(dedupKey);
-
-    pool.push({
-      cdnUrl,
-      murl: murl || cdnUrl,
-      title: checkStr
-    });
+    topicPool.push({ cdnUrl, murl: murl || cdnUrl });
   };
 
-  if (heroUrl) addWebPhotoCandidate(heroUrl, heroUrl, fullSourceTopic);
+  const addScenePhotoCandidate = (sIdx, cdnUrl, murl = '') => {
+    if (!cdnUrl || !sceneSpecificPools[sIdx]) return;
+    const checkStr = String(murl || '').toLowerCase();
+    if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
 
-  // 1. Fast PT Wikipedia Lookup -> English title + Lead Hero Photo (1.6s timeout)
+    sceneSpecificPools[sIdx].push({ cdnUrl, murl: murl || cdnUrl });
+  };
+
+  // 1. Direct Wikipedia Hero Image Lookup (PT + EN) with safe 800px thumbnail to prevent 400 errors
   try {
-    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(fullSourceTopic)}&prop=pageimages|langlinks&piprop=thumbnail&pithumbsize=1080&lllang=en&redirects=1&format=json`;
+    const ptLookupTitle = scriptData.wikiSearch || fullSourceTopic;
+    const ptUrl = `https://pt.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(ptLookupTitle)}&prop=pageimages|langlinks&piprop=thumbnail&pithumbsize=800&lllang=en&redirects=1&format=json`;
     const ptRes = await fetch(ptUrl, {
-      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai-ruby.vercel.app)' },
-      signal: AbortSignal.timeout(1600)
+      headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai.onrender.com; contact@shortsfactory.com)' },
+      signal: AbortSignal.timeout(2000)
     });
     if (ptRes.ok) {
       const ptData = await ptRes.json();
       const page = Object.values(ptData.query?.pages || {})[0];
-      if (page?.thumbnail?.source) addWebPhotoCandidate(page.thumbnail.source, page.thumbnail.source, page.title || fullSourceTopic);
+      if (page?.thumbnail?.source) {
+        addTopicPhotoCandidate(page.thumbnail.source, page.thumbnail.source);
+        if (sceneSpecificPools[0]) sceneSpecificPools[0].unshift({ cdnUrl: page.thumbnail.source, murl: page.thumbnail.source });
+      }
       if (page?.langlinks?.[0]?.['*']) {
-        enTitleFull = page.langlinks[0]['*'].trim();
-        enTitleClean = enTitleFull.replace(/\s*\([^)]*\)/g, '').trim();
+        enTitleClean = page.langlinks[0]['*'].replace(/\s*\([^)]*\)/g, '').trim();
       }
     }
   } catch (e) {}
 
-  // 2. UPGRADE #1: Run Topic Web Image Searches + Scene-Specific 1:1 Visual Action Queries in Parallel!
+  if (enTitleClean) {
+    try {
+      const enUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(enTitleClean)}&prop=pageimages&piprop=thumbnail&pithumbsize=800&redirects=1&format=json`;
+      const enRes = await fetch(enUrl, {
+        headers: { 'User-Agent': 'ShortsFactoryBot/5.0 (https://shorts-factory-ai.onrender.com; contact@shortsfactory.com)' },
+        signal: AbortSignal.timeout(2000)
+      });
+      if (enRes.ok) {
+        const enData = await enRes.json();
+        const page = Object.values(enData.query?.pages || {})[0];
+        if (page?.thumbnail?.source) {
+          addTopicPhotoCandidate(page.thumbnail.source, page.thumbnail.source);
+          if (sceneSpecificPools[0]) sceneSpecificPools[0].unshift({ cdnUrl: page.thumbnail.source, murl: page.thumbnail.source });
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Parallel Targeted Web Image Searches:
+  // - Global Topic Pool (main subject documentary shots)
+  // - Scene-Specific Pools (using curated imageQuery & fallbackThemeQuery without cross-pollution)
   const uaBrowser = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-  const enQueryBase = enTitleClean || fullSourceTopic || rawTopic;
-  const webSearchQueries = [
+  const enQueryBase = enTitleClean || rawTopic;
+
+  const topicSearches = [
     `${rawTopic} fotografia real HD -youtube -mapa -grafico -diagrama -meme`,
-    `${enQueryBase} real photograph documentary HD -youtube -map -chart -diagram`,
-    `${enQueryBase} close up inside detail photography -youtube -map -diagram`,
-    `${enQueryBase} aerial view cinematic photography HD -youtube -map`
+    `${enQueryBase} real documentary photography HD -youtube -map -chart`
   ];
 
-  // Also build per-scene specific search queries (Visual 1:1 match with the spoken sentence!)
-  const sceneSpecificPools = scenes.map(() => []);
-  const addScenePhotoCandidate = (sIdx, cdnUrl, murl = '') => {
-    if (!cdnUrl) return;
-    const checkStr = String(murl || '').toLowerCase();
-    if (/ytimg\.com|youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fbsbx\.com|pinterest\.|pinimg\.com|ifunny\.|9gag\.|geradordememes|ahnegao|slideshare\.|slideserve\.|scribd\.|researchgate\.|frontiersin\.org|mdpi\.com|springer\.com|elsevier\.com|brainly\.|quizlet\.|chegg\.|coursehero\.|studocu\.|meme|cartoon|charge|clipart|vector|vetor|icon|logo|flag|bandeira|coat_of_arms|brasao|map|mapa|locator|location|chart|grafico|diagram|diagrama|tabela|table|infographic|infografico|slide|apresentacao|capa|book|livro|selo|stamp|assinatura|signature|-comp-|_comp_|\.svg|\.gif|\.pdf/i.test(checkStr)) return;
-    sceneSpecificPools[sIdx].push({ cdnUrl, murl: murl || cdnUrl });
-    addWebPhotoCandidate(cdnUrl, murl);
-  };
-
   await Promise.allSettled([
-    ...webSearchQueries.map(async (qStr) => {
-      const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(qStr)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
-      const res = await fetch(searchUrl, {
-        headers: { 'User-Agent': uaBrowser },
-        signal: AbortSignal.timeout(2200)
-      });
-      if (!res.ok) return;
-      const html = await res.text();
-      for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
-        const murl = m[1];
-        const turl = m[2].replace(/&amp;/g, '&');
-        const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
-        addWebPhotoCandidate(smartCropCdnUrl, murl);
-      }
+    ...topicSearches.map(async (qStr) => {
+      try {
+        const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(qStr)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
+        const res = await fetch(searchUrl, { headers: { 'User-Agent': uaBrowser }, signal: AbortSignal.timeout(2500) });
+        if (!res.ok) return;
+        const html = await res.text();
+        for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
+          const murl = m[1];
+          const turl = m[2].replace(/&amp;/g, '&');
+          const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
+          addTopicPhotoCandidate(smartCropCdnUrl, murl);
+        }
+      } catch (e) {}
     }),
     ...scenes.map(async (sc, sIdx) => {
-      const visKw = sc.sceneVisualKeywords || '';
-      if (!visKw) return;
-      const sceneQ = `${enQueryBase} ${visKw} real photo HD -youtube -map -chart`;
-      const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(sceneQ)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
-      const res = await fetch(searchUrl, {
-        headers: { 'User-Agent': uaBrowser },
-        signal: AbortSignal.timeout(2100)
-      });
-      if (!res.ok) return;
-      const html = await res.text();
-      for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
-        const murl = m[1];
-        const turl = m[2].replace(/&amp;/g, '&');
-        const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
-        addScenePhotoCandidate(sIdx, smartCropCdnUrl, murl);
+      const queries = [];
+      if (sc.imageQuery) {
+        queries.push(`${sc.imageQuery} real photo HD -youtube -map -chart`);
+      }
+      if (sc.fallbackThemeQuery && sc.fallbackThemeQuery !== sc.imageQuery) {
+        queries.push(`${sc.fallbackThemeQuery} photo HD -youtube -map -chart`);
+      }
+      if (queries.length === 0) {
+        queries.push(`${enQueryBase} ${sc.sceneLabel ? sc.sceneLabel.replace(/^\d+\/\d+\s*•\s*/, '') : ''} real photo HD -youtube -map -chart`);
+      }
+
+      for (const q of queries.slice(0, 2)) {
+        try {
+          const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(q)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
+          const res = await fetch(searchUrl, { headers: { 'User-Agent': uaBrowser }, signal: AbortSignal.timeout(2500) });
+          if (res.ok) {
+            const html = await res.text();
+            for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
+              const murl = m[1];
+              const turl = m[2].replace(/&amp;/g, '&');
+              const smartCropCdnUrl = `${turl}&w=800&h=1422&c=7&rs=1&qlt=95`;
+              addScenePhotoCandidate(sIdx, smartCropCdnUrl, murl);
+            }
+          }
+        } catch (e) {}
       }
     })
   ]);
 
-  const curatedFallbacks = [
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1080&q=85',
-    'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1080&q=85',
-    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=1080&q=85',
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1080&q=85',
-    'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=1080&q=85',
-    'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=1080&q=85'
-  ];
-  for (const fb of curatedFallbacks) addWebPhotoCandidate(fb, fb);
+  console.log(`📸 [Web Image Pool] "${rawTopic}": ${topicPool.length} fotos do tema + ${scenes.map((_, i) => (sceneSpecificPools[i] || []).length).join('/')} por cena encontradas!`);
 
-  console.log(`📸 [Web Image Search 1:1 Pool] "${rawTopic}" (${enTitleClean || 'PT'}): ${pool.length} FOTOS REAIS DA WEB HD encontradas!`);
-
-  // Assign 2 distinct real web photos per scene (prioritizing Scene-Specific 1:1 match + Topic Pool!)
+  // Assign 2 distinct photos per scene (prioritizing the scene's own dedicated queries!)
   let pCursor = 0;
   const usedAcrossVideo = new Set();
   return scenes.map((_, sIdx) => {
     const sPool = sceneSpecificPools[sIdx] || [];
-    // pickCandidates: isSecondShot controls if we take from the back half of the scene pool (Shot B punch-in)
     const pickCandidates = (offset, isSecondShot) => {
       const urls = [];
-      // 1st priority: Scene-Specific 1:1 visual action photos (iterate sequentially — no stride skip!)
+      // 1st priority: Scene's own dedicated photo pool (Shot A takes from front, Shot B from back half)
       const poolStart = isSecondShot ? Math.floor(sPool.length / 2) : 0;
-      for (let m = poolStart; m < sPool.length && urls.length < 2; m++) {
+      for (let m = poolStart; m < sPool.length && urls.length < 3; m++) {
         const sp = sPool[m];
         if (sp && !usedAcrossVideo.has(sp.cdnUrl)) {
           usedAcrossVideo.add(sp.cdnUrl);
@@ -379,16 +410,30 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
           if (sp.murl && sp.murl !== sp.cdnUrl) urls.push(sp.murl);
         }
       }
-      // 2nd priority: Global Topic Web Photo Pool
-      for (let k = 0; k < 5 && urls.length < 6; k++) {
-        const item = pool[(offset + k * 3) % Math.max(1, pool.length)];
+      // If still need candidates, take remaining from sPool
+      for (let m = 0; m < sPool.length && urls.length < 2; m++) {
+        const sp = sPool[m];
+        if (sp && !urls.includes(sp.cdnUrl)) {
+          urls.push(sp.cdnUrl);
+          if (sp.murl && sp.murl !== sp.cdnUrl) urls.push(sp.murl);
+        }
+      }
+      // 2nd priority: Topic Photo Pool (photos of the exact overall topic)
+      for (let k = 0; k < topicPool.length && urls.length < 5; k++) {
+        const item = topicPool[(offset + k * 2) % Math.max(1, topicPool.length)];
         if (item && !usedAcrossVideo.has(item.cdnUrl)) {
           usedAcrossVideo.add(item.cdnUrl);
           urls.push(item.cdnUrl);
           if (item.murl && item.murl !== item.cdnUrl) urls.push(item.murl);
         }
       }
-      urls.push(curatedFallbacks[offset % curatedFallbacks.length]);
+      // Fallback: If topicPool has any photos, use them
+      for (let k = 0; k < topicPool.length && urls.length < 4; k++) {
+        const item = topicPool[k];
+        if (item && !urls.includes(item.cdnUrl)) {
+          urls.push(item.cdnUrl);
+        }
+      }
       return urls.filter(Boolean);
     };
     const qA = pickCandidates(pCursor++, false);
@@ -397,7 +442,6 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   });
 }
 
-// UPGRADE #3: Downloads a real web photo, validates via Computer Vision Quality Gate, and creates an 800x1422 Master Overscan Buffer for smooth monotonic Ken Burns zoom!
 const OVERSCAN_W = 720;
 const OVERSCAN_H = 1280;
 const VIDEO_FPS = 20;
@@ -411,28 +455,32 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
   for (const url of urlQueue) {
     if (!url) continue;
     try {
+      const isWiki = url.includes('wikimedia.org') || url.includes('wikipedia.org');
+      const ua = isWiki
+        ? 'ShortsFactoryBot/5.0 (https://shorts-factory-ai.onrender.com; contact@shortsfactory.com)'
+        : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
       const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        },
-        signal: AbortSignal.timeout(2000)
+        headers: { 'User-Agent': ua },
+        signal: AbortSignal.timeout(2800)
       });
       if (res.ok) {
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.length > 15000) {
-          const st = await sharp(buf).stats();
-          const c0 = st.channels[0] || { mean: 128, stdev: 45 };
-          const c1 = st.channels[1] || c0;
-          const c2 = st.channels[2] || c0;
-          const avgMean = (c0.mean + c1.mean + c2.mean) / 3;
-          const avgStdev = (c0.stdev + c1.stdev + c2.stdev) / 3;
-          const entropy = st.entropy || 7.0;
+        if (buf.length > 8000) {
+          try {
+            const st = await sharp(buf).stats();
+            const c0 = st.channels[0] || { mean: 128, stdev: 45 };
+            const c1 = st.channels[1] || c0;
+            const c2 = st.channels[2] || c0;
+            const avgMean = (c0.mean + c1.mean + c2.mean) / 3;
+            const avgStdev = (c0.stdev + c1.stdev + c2.stdev) / 3;
 
-          if (avgMean >= 16 && avgMean <= 216 && avgStdev >= 30 && entropy >= 6.25) {
-            bestImgBuf = buf;
-            break;
-          }
-          if (!bestImgBuf) bestImgBuf = buf;
+            // Must have contrast and not be solid color
+            if (avgMean >= 10 && avgMean <= 245 && avgStdev >= 14) {
+              bestImgBuf = buf;
+              break; // Found a high quality real photo! Stop immediately!
+            }
+          } catch (sharpErr) {}
         }
       }
     } catch (e) {}
@@ -985,5 +1033,6 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
 }
 
 module.exports = {
-  buildShortVideo
+  buildShortVideo,
+  prefetchTopicPhotoUrlsForScenes
 };
