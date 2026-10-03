@@ -464,6 +464,33 @@
       </div>
     </div>
 
+    <!-- YOUTUBE CHANNEL ANTI-DUPLICATION SYNC -->
+    <div class="card" style="border-color:rgba(255, 68, 68, 0.45); background:radial-gradient(circle at 100% 0%, rgba(255, 68, 68, 0.12) 0%, #0d0f1a 75%);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.3rem;">📺</span>
+          <div>
+            <h3 style="font-size:0.92rem; margin:0; color:#ff5555; font-weight:800;">Sincronizar Canal do YouTube</h3>
+            <span id="ytSyncStatusBadge" style="font-size:0.7rem; color:#8f90a6; font-weight:700;">Proteção ativa contra temas já postados</span>
+          </div>
+        </div>
+        <span id="ytCountBadge" style="font-size:0.68rem; background:rgba(255,85,85,0.15); color:#ff7777; border:1px solid rgba(255,85,85,0.3); padding:2px 8px; border-radius:999px; font-weight:800;">0 Shorts</span>
+      </div>
+
+      <p style="font-size:0.78rem; color:#a0a2bc; margin-bottom:12px; line-height:1.4;">
+        Digite o <strong>@handle</strong> ou link do seu canal. O Shorts Factory inspeciona todos os vídeos/Shorts já publicados e adiciona os títulos e temas ao bloqueio anti-duplicação, garantindo que <strong>nunca sejam gerados vídeos repetidos</strong>.
+      </p>
+
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input type="text" id="ytChannelInput" placeholder="@SeuCanal ou link do canal" style="flex:1; padding:10px 12px; font-size:0.82rem; border-radius:12px; border:1px solid rgba(255,85,85,0.3); background:rgba(0,0,0,0.35);" />
+        <button id="btnSyncYouTube" class="btn-secondary" style="padding:10px 14px; font-size:0.78rem; color:#ff5555; border-color:rgba(255,85,85,0.45); font-weight:800; white-space:nowrap;" onclick="syncWithYouTubeChannel()">
+          🔄 Sincronizar
+        </button>
+      </div>
+
+      <div id="ytSyncResultBox" style="display:none; font-size:0.74rem; padding:10px 12px; border-radius:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); margin-top:4px;"></div>
+    </div>
+
     <!-- TELEGRAM CLOUD DATABASE & MULTI-DEVICE STORAGE -->
     <div class="card" style="border-color:rgba(0, 136, 204, 0.45); background:linear-gradient(180deg, #101528 0%, #0c0e18 100%);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1383,6 +1410,20 @@
             saveLocalUsedTopic(t, null);
           }
         }
+        if (data.youtube) {
+          const input = document.getElementById('ytChannelInput');
+          if (input && !input.value && data.youtube.channelInput) {
+            input.value = data.youtube.channelInput;
+          }
+          const badge = document.getElementById('ytSyncStatusBadge');
+          if (badge && data.youtube.channelTitle) {
+            badge.textContent = `🟢 Sincronizado: ${data.youtube.channelTitle}`;
+          }
+          const countBadge = document.getElementById('ytCountBadge');
+          if (countBadge && data.youtube.syncedShortsCount !== undefined) {
+            countBadge.textContent = `${data.youtube.syncedShortsCount} Shorts Bloqueados`;
+          }
+        }
       } catch (e) {}
 
       let localVideos = [];
@@ -1470,6 +1511,58 @@
       } finally {
         btn.disabled = false;
         btn.textContent = '🛡️ Puxar Memória Anti-Repetição';
+      }
+    }
+
+    async function syncWithYouTubeChannel() {
+      const input = document.getElementById('ytChannelInput');
+      const val = (input.value || '').trim();
+      if (!val) {
+        alert('Digite o @handle ou link do seu canal do YouTube (exemplo: @SeuCanal).');
+        return;
+      }
+      const btn = document.getElementById('btnSyncYouTube');
+      const resBox = document.getElementById('ytSyncResultBox');
+      btn.disabled = true;
+      btn.textContent = '⏳ Lendo canal...';
+      resBox.style.display = 'block';
+      resBox.innerHTML = '<span style="color:#ffe600;">🔍 Conectando ao YouTube e inspecionando todos os Shorts publicados no canal...</span>';
+
+      try {
+        const res = await fetch('/api/youtube/sync-channel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: val })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Erro ao sincronizar canal');
+        }
+
+        const badge = document.getElementById('ytSyncStatusBadge');
+        if (badge) badge.textContent = `🟢 Sincronizado: ${data.channelTitle}`;
+        const countBadge = document.getElementById('ytCountBadge');
+        if (countBadge) countBadge.textContent = `${data.totalFound} Shorts Bloqueados`;
+
+        let sampleHtml = '';
+        if (Array.isArray(data.recentSample) && data.recentSample.length > 0) {
+          sampleHtml = `<div style="margin-top:8px; max-height:100px; overflow-y:auto; font-size:0.71rem; color:#d0d2e0; line-height:1.4; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px;">
+            <strong style="color:#ff7777;">Títulos blindados do seu canal:</strong><br>
+            ${data.recentSample.slice(0, 6).map(t => `• ${escapeHtmlAttr(t)}`).join('<br>')}
+          </div>`;
+        }
+
+        resBox.innerHTML = `<span style="color:#00ff88; font-weight:800;">✅ ${data.totalFound} Shorts importados com sucesso!</span><br>
+          <span style="color:#a0a2bc;">${data.newTitlesAdded} títulos e ${data.newTopicsAdded} temas foram registrados na memória anti-duplicação. Nenhum desses temas será gerado novamente!</span>
+          ${sampleHtml}`;
+
+        showToast(`✅ ${data.totalFound} Shorts sincronizados com o YouTube!`);
+        await loadHistoryGallery();
+      } catch (err) {
+        resBox.innerHTML = `<span style="color:#ff6b6b; font-weight:700;">❌ Falha ao sincronizar:</span> ${escapeHtmlAttr(err.message)}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Sincronizar';
       }
     }
 
