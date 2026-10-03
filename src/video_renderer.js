@@ -412,33 +412,30 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       const poolStart = isSecondShot ? Math.floor(sPool.length / 2) : 0;
       for (let m = poolStart; m < sPool.length && urls.length < 3; m++) {
         const sp = sPool[m];
-        if (sp && !usedAcrossVideo.has(sp.cdnUrl)) {
+        if (sp && sp.cdnUrl && !usedAcrossVideo.has(sp.cdnUrl)) {
           usedAcrossVideo.add(sp.cdnUrl);
           urls.push(sp.cdnUrl);
-          if (sp.murl && sp.murl !== sp.cdnUrl) urls.push(sp.murl);
         }
       }
       // If still need candidates, take remaining from sPool
-      for (let m = 0; m < sPool.length && urls.length < 2; m++) {
+      for (let m = 0; m < sPool.length && urls.length < 3; m++) {
         const sp = sPool[m];
-        if (sp && !urls.includes(sp.cdnUrl)) {
+        if (sp && sp.cdnUrl && !urls.includes(sp.cdnUrl)) {
           urls.push(sp.cdnUrl);
-          if (sp.murl && sp.murl !== sp.cdnUrl) urls.push(sp.murl);
         }
       }
       // 2nd priority: Topic Photo Pool (photos of the exact overall topic)
-      for (let k = 0; k < topicPool.length && urls.length < 5; k++) {
+      for (let k = 0; k < topicPool.length && urls.length < 4; k++) {
         const item = topicPool[(offset + k * 2) % Math.max(1, topicPool.length)];
-        if (item && !usedAcrossVideo.has(item.cdnUrl)) {
+        if (item && item.cdnUrl && !usedAcrossVideo.has(item.cdnUrl)) {
           usedAcrossVideo.add(item.cdnUrl);
           urls.push(item.cdnUrl);
-          if (item.murl && item.murl !== item.cdnUrl) urls.push(item.murl);
         }
       }
       // Fallback: If topicPool has any photos, use them
-      for (let k = 0; k < topicPool.length && urls.length < 4; k++) {
+      for (let k = 0; k < topicPool.length && urls.length < 3; k++) {
         const item = topicPool[k];
-        if (item && !urls.includes(item.cdnUrl)) {
+        if (item && item.cdnUrl && !urls.includes(item.cdnUrl)) {
           urls.push(item.cdnUrl);
         }
       }
@@ -460,7 +457,7 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
   const pal = getAtmospherePalette(colorTheme);
   let bestImgBuf = null;
 
-  for (const url of urlQueue) {
+  for (const url of urlQueue.slice(0, 3)) {
     if (!url) continue;
     try {
       const isWiki = url.includes('wikimedia.org') || url.includes('wikipedia.org');
@@ -468,27 +465,20 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
         ? 'ShortsFactoryBot/5.0 (https://shorts-factory-ai.onrender.com; contact@shortsfactory.com)'
         : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-      const res = await fetch(url, {
-        headers: { 'User-Agent': ua },
-        signal: AbortSignal.timeout(2800)
-      });
-      if (res.ok) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.length > 8000) {
-          try {
-            const st = await sharp(buf).stats();
-            const c0 = st.channels[0] || { mean: 128, stdev: 45 };
-            const c1 = st.channels[1] || c0;
-            const c2 = st.channels[2] || c0;
-            const avgMean = (c0.mean + c1.mean + c2.mean) / 3;
-            const avgStdev = (c0.stdev + c1.stdev + c2.stdev) / 3;
+      const res = await Promise.race([
+        fetch(url, { headers: { 'User-Agent': ua } }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Fetch timeout')), 2500))
+      ]);
 
-            // Must have contrast and not be solid color
-            if (avgMean >= 10 && avgMean <= 245 && avgStdev >= 14) {
-              bestImgBuf = buf;
-              break; // Found a high quality real photo! Stop immediately!
-            }
-          } catch (sharpErr) {}
+      if (res && res.ok) {
+        const arrayBuf = await Promise.race([
+          res.arrayBuffer(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Buffer timeout')), 2500))
+        ]);
+        const buf = Buffer.from(arrayBuf);
+        if (buf.length > 3000) {
+          bestImgBuf = buf;
+          break; // Found valid high-quality photo buffer!
         }
       }
     } catch (e) {}
@@ -497,24 +487,24 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
   if (bestImgBuf) {
     try {
       if (isPunchIn) {
-        // Dynamic Shot B: 116% Macro Punch-in Cut on center action (Vox / Documentary signature style)
+        // Dynamic Shot B: 116% Macro Punch-in Cut on center action
         const punchW = Math.round(OVERSCAN_W * 1.16);
         const punchH = Math.round(OVERSCAN_H * 1.16);
         const left = Math.round((punchW - OVERSCAN_W) / 2);
         const top = Math.round((punchH - OVERSCAN_H) / 2);
         return await sharp(bestImgBuf)
-          .resize(punchW, punchH, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
+          .resize(punchW, punchH, { fit: 'cover', position: 'center' })
           .extract({ left, top, width: OVERSCAN_W, height: OVERSCAN_H })
-          .sharpen({ sigma: 1.15, m1: 0.9, m2: 1.8 })
-          .modulate({ brightness: 1.05, saturation: 1.22 })
+          .sharpen({ sigma: 1.05 })
+          .modulate({ brightness: 1.05, saturation: 1.18 })
           .jpeg({ quality: 80 })
           .toBuffer();
       } else {
         // Shot A: Wide / Medium Framing with rich vibrant grading
         return await sharp(bestImgBuf)
-          .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'attention', kernel: sharp.kernel.lanczos3 })
-          .sharpen({ sigma: 1.10, m1: 0.8, m2: 1.6 })
-          .modulate({ brightness: 1.04, saturation: 1.18 })
+          .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'center' })
+          .sharpen({ sigma: 1.0 })
+          .modulate({ brightness: 1.04, saturation: 1.15 })
           .jpeg({ quality: 80 })
           .toBuffer();
       }
@@ -797,54 +787,55 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const palette = getAtmospherePalette(colorTheme);
 
   onProgress(15, isDuetPodcast
-    ? 'Dueto Dinâmico: Gravando Yara 👩 + Nicolau 👨 + Buscando 14 Fotos Web HD...'
-    : 'Studio Pop 4.0: Buscando 14 Fotos Web 1:1 + Gravando Vozes Simultaneamente...');
+    ? 'Dueto Dinâmico: Iniciando gravação de Francisca 👩 & Antônio 👨...'
+    : 'Studio Pop: Iniciando gravação das vozes neurais e fotos reais...');
 
   const sceneAssets = [];
   const sceneStartTimes = [];
   let totalDuration = 0;
 
-  // 1. Ultra-Fast Parallel Neural Voice Synthesis (All scenes synthesize concurrently in < 1.5s total!)
-  const ttsJobsPromise = Promise.all(scenes.map(async (s, sceneIdx) => {
+  // 1. Smooth Step-by-Step Neural Voice Synthesis with live progress
+  const ttsResults = [];
+  for (let sceneIdx = 0; sceneIdx < scenes.length; sceneIdx++) {
+    const s = scenes[sceneIdx];
     const audioWavPath = path.join(tmpDir, `scene_${sceneIdx}.wav`);
     let sceneVoice = s.voice || voiceName;
-    if (voiceName === 'duet-yara-nicolau') {
-      sceneVoice = (sceneIdx % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
-    } else if (voiceName === 'duet-podcast') {
+    if (voiceName === 'duet-yara-nicolau' || voiceName === 'duet' || voiceName === 'duet-podcast') {
       sceneVoice = (sceneIdx % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
     }
+    const isMale = (sceneVoice && (sceneVoice.includes('Antonio') || sceneVoice.includes('Nicolau'))) || (sceneIdx % 2 === 1);
+    const speakerLabel = isMale ? 'Antônio 👨' : 'Francisca 👩';
+    const pct = 18 + Math.round((sceneIdx / scenes.length) * 28);
+    onProgress(pct, `Gravando voz neural (${speakerLabel}): Cena ${sceneIdx + 1}/${scenes.length}...`);
     const ttsResult = await synthesizeSpeechWithTimings(s.narration, audioWavPath, sceneVoice, sceneIdx);
-    return { audioWavPath, ttsResult, sceneVoice };
+    ttsResults.push({ audioWavPath, ttsResult, sceneVoice });
+  }
+
+  // 2. Fast Web Photos Prefetch
+  onProgress(48, 'Buscando 14 fotos reais HD da Web...');
+  const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
+
+  // 3. Ultra-fast 9:16 Photo Processing
+  onProgress(56, 'Preparando fotos 9:16 Full-Screen...');
+  const scenePhotoBuffers = await Promise.all(scenes.map(async (_, i) => {
+    const pQ = photoQueues[i] || photoQueues[0] || { queueA: [], queueB: [] };
+    const [photoBufA, photoBufB] = await Promise.all([
+      prepareScenePhotoBuffer(pQ.queueA, colorTheme, false),
+      prepareScenePhotoBuffer(pQ.queueB, colorTheme, true)
+    ]);
+    return { photoBufA, photoBufB };
   }));
 
-  const photosPreparePromise = (async () => {
-    const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
-    return Promise.all(scenes.map(async (_, i) => {
-      const pQ = photoQueues[i] || photoQueues[0] || { queueA: [], queueB: [] };
-      const [photoBufA, photoBufB] = await Promise.all([
-        prepareScenePhotoBuffer(pQ.queueA, colorTheme, false),
-        prepareScenePhotoBuffer(pQ.queueB, colorTheme, true)
-      ]);
-      return { photoBufA, photoBufB };
-    }));
-  })();
-
-  const [ttsResults, scenePhotoBuffers] = await Promise.all([
-    ttsJobsPromise,
-    photosPreparePromise
-  ]);
-
-  onProgress(52, isDuetPodcast
-    ? 'Dueto Sincronizado: Mixando Vozes de Yara 👩 & Nicolau 👨...'
-    : 'Sincronizando 14 Fotos Web HD + Efeitos por Palavra...');
+  onProgress(66, isDuetPodcast
+    ? 'Dueto Sincronizado: Mixando vozes de Francisca 👩 & Antônio 👨...'
+    : 'Sincronizando 14 fotos reais HD + Efeitos por Palavra...');
 
   for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult, sceneVoice } = ttsResults[i];
     const { photoBufA, photoBufB } = scenePhotoBuffers[i];
     const isMale = (sceneVoice && (sceneVoice.includes('Nicolau') || sceneVoice.includes('Antonio') || sceneVoice.includes('Fabio') || sceneVoice.includes('Donato'))) || (isDuetPodcast && (i % 2 === 1));
-    const isNicolau = sceneVoice && sceneVoice.includes('Nicolau');
     const speakerInfo = isDuetPodcast ? {
-      name: isNicolau ? 'Nicolau' : (isMale ? 'Antônio' : (sceneVoice.includes('Yara') ? 'Yara' : 'Thalita')),
+      name: isMale ? 'Antônio' : 'Francisca',
       emoji: isMale ? '👨' : '👩',
       color: isMale ? '#00f0ff' : '#ff007f',
       role: isMale ? 'Narrador' : 'Apresentadora'
