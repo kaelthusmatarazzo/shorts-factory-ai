@@ -325,12 +325,44 @@ app.post('/api/telegram/restore-db', async (req, res) => {
   }
 });
 
+// YouTube Channel Sync & Anti-Duplication
+app.get('/api/youtube/channel', (req, res) => {
+  try {
+    delete require.cache[require.resolve('./src/youtube_channel_sync')];
+    const { loadStoredYouTubeConfig } = require('./src/youtube_channel_sync');
+    const cfg = loadStoredYouTubeConfig();
+    res.json({ ok: true, channel: cfg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/youtube/sync-channel', async (req, res) => {
+  try {
+    const { channel } = req.body || {};
+    if (!channel || !channel.trim()) {
+      return res.status(400).json({ error: 'Informe o @handle ou link do seu canal (ex: @SeuCanal)' });
+    }
+    delete require.cache[require.resolve('./src/youtube_channel_sync')];
+    delete require.cache[require.resolve('./src/generator')];
+    const { syncYouTubeChannelShorts } = require('./src/youtube_channel_sync');
+    const result = await syncYouTubeChannelShorts(channel.trim(), 6);
+    res.json(result);
+  } catch (err) {
+    console.error('[YouTube Sync Error]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar com canal do YouTube' });
+  }
+});
+
 app.get('/api/history', (req, res) => {
   delete require.cache[require.resolve('./src/generator')];
+  delete require.cache[require.resolve('./src/youtube_channel_sync')];
   const { loadHistory: loadHist } = require('./src/generator');
   const { loadTelegramConfig } = require('./src/telegram_storage');
+  const { loadStoredYouTubeConfig } = require('./src/youtube_channel_sync');
   const history = loadHist();
   const tgCfg = loadTelegramConfig();
+  const ytCfg = loadStoredYouTubeConfig();
   res.json({
     tunnelUrl: currentTunnelUrl,
     usedTopics: history.usedTopics || [],
@@ -341,7 +373,8 @@ app.get('/api/history', (req, res) => {
       configured: Boolean(tgCfg.botToken && tgCfg.chatId),
       botUsername: tgCfg.botUsername || 'Shofacbot',
       chatTitle: tgCfg.chatTitle || 'Shorts Factory History'
-    }
+    },
+    youtube: ytCfg
   });
 });
 
