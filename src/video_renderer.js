@@ -4,7 +4,7 @@ const { execFileSync } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const sharp = require('sharp');
 // Strict memory protection for 512MB cloud instances (prevents OOM SIGKILL restarts)
-sharp.concurrency(2);
+sharp.concurrency(1);
 sharp.cache(false);
 const opentype = require('opentype.js');
 
@@ -366,10 +366,12 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
   const usedAcrossVideo = new Set();
   return scenes.map((_, sIdx) => {
     const sPool = sceneSpecificPools[sIdx] || [];
-    const pickCandidates = (offset, halfSlot) => {
+    // pickCandidates: isSecondShot controls if we take from the back half of the scene pool (Shot B punch-in)
+    const pickCandidates = (offset, isSecondShot) => {
       const urls = [];
-      // 1st priority: Scene-Specific 1:1 visual action photo not yet used
-      for (let m = halfSlot; m < sPool.length && urls.length < 2; m += 2) {
+      // 1st priority: Scene-Specific 1:1 visual action photos (iterate sequentially — no stride skip!)
+      const poolStart = isSecondShot ? Math.floor(sPool.length / 2) : 0;
+      for (let m = poolStart; m < sPool.length && urls.length < 2; m++) {
         const sp = sPool[m];
         if (sp && !usedAcrossVideo.has(sp.cdnUrl)) {
           usedAcrossVideo.add(sp.cdnUrl);
@@ -379,7 +381,7 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       }
       // 2nd priority: Global Topic Web Photo Pool
       for (let k = 0; k < 5 && urls.length < 6; k++) {
-        const item = pool[(offset + k * 3) % pool.length];
+        const item = pool[(offset + k * 3) % Math.max(1, pool.length)];
         if (item && !usedAcrossVideo.has(item.cdnUrl)) {
           usedAcrossVideo.add(item.cdnUrl);
           urls.push(item.cdnUrl);
@@ -389,8 +391,8 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
       urls.push(curatedFallbacks[offset % curatedFallbacks.length]);
       return urls.filter(Boolean);
     };
-    const qA = pickCandidates(pCursor++, 0);
-    const qB = pickCandidates(pCursor++, 1);
+    const qA = pickCandidates(pCursor++, false);
+    const qB = pickCandidates(pCursor++, true);
     return { queueA: qA, queueB: qB };
   });
 }
@@ -532,10 +534,12 @@ function buildExactTimedChunks(narrationText, wordBoundaries, sceneDurationSec) 
     for (let c = 0; c < grouped.length; c++) {
       const phraseItems = grouped[c];
       const phraseWords = phraseItems.map(x => x.word);
-      const phraseStartSec = (c === 0) ? 0.0 : phraseItems[0].offsetSec;
+      // Use accumulated duration from word boundaries for accurate timing (offsetSec alone breaks after ratio rescaling)
+      const phraseStartSec = phraseItems[0].offsetSec;
+      const lastItem = phraseItems[phraseItems.length - 1];
       const nextPhraseStartSec = (c < grouped.length - 1)
         ? Math.max(phraseStartSec + 0.12, grouped[c + 1][0].offsetSec)
-        : sceneDurationSec;
+        : Math.max(phraseStartSec + 0.12, lastItem.offsetSec + lastItem.durationSec);
 
       // Select the most impactful power word in the phrase to highlight (Gold Number, Danger, or punchiest word)
       let highlightIdx = 0;
