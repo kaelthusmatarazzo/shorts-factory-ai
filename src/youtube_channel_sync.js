@@ -254,6 +254,39 @@ async function syncYouTubeChannelShorts(channelInput, maxPages = 5) {
     }
   }
 
+  // Cross-reference with Curated Documentary Facts Bank
+  try {
+    const { CURATED_DOCUMENTARY_FACTS } = require('./curated_facts_bank');
+    for (const s of result.shorts) {
+      const sTitle = (s.cleanTitle || '').toLowerCase();
+      for (const c of CURATED_DOCUMENTARY_FACTS) {
+        const cTopic = (c.topic || '').toLowerCase();
+        const cTitle = (c.title || '').toLowerCase();
+        const narrations = (c.scenes || []).map(sc => (sc.narration || '').toLowerCase()).join(' ');
+
+        if (
+          (cTopic && (sTitle.includes(cTopic) || cTopic.includes(sTitle))) ||
+          (cTitle && (sTitle.includes(cTitle) || cTitle.includes(sTitle))) ||
+          (sTitle.length > 15 && narrations.includes(sTitle.substring(0, 30))) ||
+          (sTitle.includes('sempre') && cTopic.includes('turritopsis')) ||
+          (sTitle.includes('pata de elefante') && cTopic.includes('elefante')) ||
+          (sTitle.includes('litoral de sao paulo') && cTopic.includes('queimada grande'))
+        ) {
+          if (c.topic && !history.usedTopics.includes(c.topic)) {
+            history.usedTopics.push(c.topic);
+            newTopicsAdded++;
+          }
+          if (c.title && !history.usedTitles.includes(c.title)) {
+            history.usedTitles.push(c.title);
+          }
+          if (c.wikiSearch && !history.usedTopics.includes(c.wikiSearch)) {
+            history.usedTopics.push(c.wikiSearch);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   global.__SHORTS_FACTORY_HISTORY__ = history;
   try {
     fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf8');
