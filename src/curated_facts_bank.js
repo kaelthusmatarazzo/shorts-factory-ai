@@ -641,8 +641,8 @@ const CURATED_DOCUMENTARY_FACTS = [
       },
       {
         narration: 'E o mais incrível: dentro desse lago escuro e sem oxigênio, biólogos encontraram colônias de bactérias vivas que se alimentam de ferro e enxofre há dois milhões de anos, provando como pode existir vida subterrânea em Marte.',
-        imageQuery: 'Extremophile bacteria microscope',
-        fallbackThemeQuery: 'mars ice cap space nasa',
+        imageQuery: 'Blood Falls Antarctica scientific research',
+        fallbackThemeQuery: 'Taylor Glacier Antarctica red water flow',
         sceneLabel: '6/7 • Vida Sem Luz e Sem Oxigênio'
       }
     ]
