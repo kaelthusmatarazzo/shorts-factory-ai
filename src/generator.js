@@ -19,6 +19,24 @@ if (!global.__SHORTS_FACTORY_HISTORY__) {
   global.__SHORTS_FACTORY_HISTORY__ = { usedTitles: [], usedTopics: [], videos: [] };
 }
 
+const TOPIC_STOPWORDS = new Set([
+  'para', 'com', 'mais', 'como', 'onde', 'quando', 'sobre', 'esse', 'essa', 'este', 'esta',
+  'todo', 'toda', 'todos', 'todas', 'voce', 'sabia', 'qual', 'porque', 'pelo', 'pela',
+  'pelos', 'pelas', 'numa', 'num', 'dele', 'dela', 'deles', 'delas', 'isso', 'aquilo',
+  'shorts', 'short', 'video', 'fato', 'fatos', 'curiosidade', 'curiosidades', 'segredo', 'misterio',
+  'descubra', 'veja', 'olha'
+]);
+
+function extractTopicWords(str) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !TOPIC_STOPWORDS.has(w));
+}
+
 function normalizeTopicKey(str) {
   return String(str || '')
     .toLowerCase()
@@ -32,11 +50,28 @@ function normalizeTopicKey(str) {
 function isTopicAlreadyUsed(candidate, usedList = []) {
   const candKey = normalizeTopicKey(candidate);
   if (!candKey) return false;
+  const candWords = extractTopicWords(candidate);
+
   for (const item of usedList) {
     const itemKey = normalizeTopicKey(item);
     if (!itemKey) continue;
-    if (candKey === itemKey || (candKey.length > 5 && itemKey.includes(candKey)) || (itemKey.length > 5 && candKey.includes(itemKey))) {
+
+    // 1. Direct key match or substring containment
+    if (candKey === itemKey || (candKey.length >= 5 && itemKey.includes(candKey)) || (itemKey.length >= 5 && candKey.includes(itemKey))) {
       return true;
+    }
+
+    // 2. Token overlap: single distinct subject keyword (length >= 6) or 2+ shared topic words
+    const itemWords = extractTopicWords(item);
+    if (candWords.length > 0 && itemWords.length > 0) {
+      let sharedCount = 0;
+      for (const cw of candWords) {
+        if (itemWords.includes(cw)) {
+          if (cw.length >= 6) return true;
+          sharedCount++;
+        }
+      }
+      if (sharedCount >= 2) return true;
     }
   }
   return false;
@@ -808,5 +843,6 @@ module.exports = {
   loadHistory,
   saveToHistory,
   clearHistory,
-  normalizeMetadata
+  normalizeMetadata,
+  isTopicAlreadyUsed
 };
