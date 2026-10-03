@@ -17,7 +17,9 @@ const FILES_TO_PUSH = [
   'src/github_deployer.js',
   'src/telegram_storage.js',
   'src/r2_storage.js',
+  'src/youtube_channel_sync.js',
   'data/telegram_config.json',
+  'data/youtube_channel.json',
   'data/history.json'
 ];
 
