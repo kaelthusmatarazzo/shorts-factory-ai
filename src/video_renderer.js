@@ -363,20 +363,28 @@ async function prefetchTopicPhotoUrlsForScenes(scriptData) {
     }),
     ...scenes.map(async (sc, sIdx) => {
       const queries = [];
+      const cleanSubject = enQueryBase || rawTopic;
+
       if (sc.imageQuery) {
-        queries.push(`${sc.imageQuery} real photo HD -youtube -map -chart`);
+        const hasSubject = sc.imageQuery.toLowerCase().includes(cleanSubject.toLowerCase().slice(0, 6)) ||
+                           cleanSubject.toLowerCase().includes(sc.imageQuery.toLowerCase().slice(0, 6));
+        const anchoredQuery = hasSubject ? sc.imageQuery : `${cleanSubject} ${sc.imageQuery}`;
+        queries.push(`${anchoredQuery} real photo HD -youtube -map -chart`);
       }
+
       if (sc.fallbackThemeQuery && sc.fallbackThemeQuery !== sc.imageQuery) {
-        queries.push(`${sc.fallbackThemeQuery} photo HD -youtube -map -chart`);
+        const hasSubject = sc.fallbackThemeQuery.toLowerCase().includes(cleanSubject.toLowerCase().slice(0, 6)) ||
+                           cleanSubject.toLowerCase().includes(sc.fallbackThemeQuery.toLowerCase().slice(0, 6));
+        const anchoredFallback = hasSubject ? sc.fallbackThemeQuery : `${cleanSubject} ${sc.fallbackThemeQuery}`;
+        queries.push(`${anchoredFallback} photo HD -youtube -map -chart`);
       }
-      if (queries.length === 0) {
-        queries.push(`${enQueryBase} ${sc.sceneLabel ? sc.sceneLabel.replace(/^\d+\/\d+\s*•\s*/, '') : ''} real photo HD -youtube -map -chart`);
-      }
+
+      queries.push(`${cleanSubject} photography HD -youtube -map -chart`);
 
       for (const q of queries.slice(0, 2)) {
         try {
           const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(q)}&qft=+filterui:imagesize-large+filterui:photo-photo&form=IRFLTR`;
-          const res = await fetch(searchUrl, { headers: { 'User-Agent': uaBrowser }, signal: AbortSignal.timeout(2500) });
+          const res = await fetch(searchUrl, { headers: { 'User-Agent': uaBrowser }, signal: AbortSignal.timeout(4500) });
           if (res.ok) {
             const html = await res.text();
             for (const m of html.matchAll(/murl&quot;:&quot;(https?:\/\/.+?)&quot;,&quot;turl&quot;:&quot;(https?:\/\/.+?)&quot;/g)) {
@@ -682,53 +690,18 @@ function concatenateWavFilesSampleExact(wavPaths, outputMasterWavPath) {
 }
 
 
-// UPGRADE #4: Pre-bake Shot A & B with static vignettes and badges ONCE per shot.
-// This reduces Sharp SVG rasterization from 200 operations to only 8-14, making video rendering 10x faster and eliminating OOM kills!
-async function preparePrebakedShot(photoBuffer, palette, speakerInfo = null, topicBadge = null) {
-  const pal = palette || getAtmospherePalette('cosmic');
-
-  // Studio Category Topic Tag (Top Center, y=22)
-  const categoryBadgeSvg = topicBadge ? `
-    <g opacity="0.92">
-      <rect x="210" y="22" width="300" height="26" rx="13" fill="#050711" fill-opacity="0.84" stroke="${pal.accent}" stroke-width="1.2" stroke-opacity="0.6"/>
-      <text x="360" y="39" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="10.5" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">
-        ● ${String(topicBadge).toUpperCase()}
-      </text>
-    </g>` : '';
-
-  // Host Indicator Badge for Duet Podcast Mode (Glowing pill below topic badge, y=56)
-  const speakerBadgeSvg = (speakerInfo && speakerInfo.name) ? `
-    <g opacity="0.96">
-      <defs>
-        <filter id="badgeGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="${speakerInfo.color}" flood-opacity="0.5"/>
-        </filter>
-      </defs>
-      <rect x="235" y="56" width="250" height="38" rx="19" fill="#070914" fill-opacity="0.90" stroke="${speakerInfo.color}" stroke-width="2" filter="url(#badgeGlow)"/>
-      <text x="360" y="81" font-family="'Montserrat', 'Arial Black', sans-serif" font-size="14.5" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">
-        ${speakerInfo.emoji} ${speakerInfo.name.toUpperCase()} 🎙️
-      </text>
-    </g>` : '';
-
+// Clean Shot A & B pre-baking: Only soft bottom vignette for high-contrast subtitles (Zero badges on screen!)
+async function preparePrebakedShot(photoBuffer, palette) {
   const staticHudSvg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="topVignette" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#020308" stop-opacity="0.65"/>
-        <stop offset="60%" stop-color="#020308" stop-opacity="0.20"/>
-        <stop offset="100%" stop-color="#000000" stop-opacity="0.00"/>
-      </linearGradient>
       <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#000000" stop-opacity="0.00"/>
-        <stop offset="40%" stop-color="#000000" stop-opacity="0.20"/>
-        <stop offset="100%" stop-color="#000000" stop-opacity="0.52"/>
+        <stop offset="45%" stop-color="#000000" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0.65"/>
       </linearGradient>
     </defs>
-    <!-- Top Cinema Vignette (Protects HUD & Host Badges) -->
-    <rect width="${WIDTH}" height="140" fill="url(#topVignette)"/>
-    <!-- Bottom Vibrant Subtitle Vignette (Keeps Photo Bright & Luminous) -->
-    <rect y="790" width="${WIDTH}" height="490" fill="url(#bottomVignette)"/>
-    ${categoryBadgeSvg}
-    ${speakerBadgeSvg}
+    <!-- Bottom Subtitle Contrast Vignette (Keeps 100% of the upper video clean and badge-free) -->
+    <rect y="780" width="${WIDTH}" height="500" fill="url(#bottomVignette)"/>
   </svg>`;
 
   return sharp(photoBuffer)
@@ -908,8 +881,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
     const [bakedShotA, bakedShotB] = await Promise.all([
-      preparePrebakedShot(asset.photoBufA, palette, asset.speakerInfo, scriptData.badge || 'FATOS CURIOSOS & CIÊNCIA'),
-      preparePrebakedShot(asset.photoBufB, palette, asset.speakerInfo, scriptData.badge || 'FATOS CURIOSOS & CIÊNCIA')
+      preparePrebakedShot(asset.photoBufA, palette),
+      preparePrebakedShot(asset.photoBufB, palette)
     ]);
     asset.bakedShotA = bakedShotA;
     asset.bakedShotB = bakedShotB;
