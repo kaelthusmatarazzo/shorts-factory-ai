@@ -65,15 +65,17 @@ function loadElevenLabsConfig() {
 }
 
 // Synthesize speech in PT-BR with dynamic human prosody and capture EXACT Microsoft Neural WordBoundary timestamps (100ns precision!)
-async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-YaraNeural', sceneIndex = 0) {
-  // Sanitize voiceName to guarantee a valid Edge TTS or ElevenLabs voice
-  let safeVoice = voiceName || 'pt-BR-YaraNeural';
-  if (safeVoice === 'duet-yara-nicolau' || safeVoice === 'duet') {
-    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
-  } else if (safeVoice === 'duet-podcast') {
+async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-BR-FranciscaNeural', sceneIndex = 0) {
+  // Sanitize voiceName to active reliable Edge TTS neural voices
+  let safeVoice = voiceName || 'pt-BR-FranciscaNeural';
+  if (safeVoice === 'duet-yara-nicolau' || safeVoice === 'duet' || safeVoice === 'duet-podcast') {
     safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
+  } else if (safeVoice === 'pt-BR-YaraNeural' || safeVoice === 'pt-BR-BrendaNeural') {
+    safeVoice = 'pt-BR-FranciscaNeural';
+  } else if (safeVoice === 'pt-BR-NicolauNeural' || safeVoice === 'pt-BR-DonatoNeural' || safeVoice === 'pt-BR-FabioNeural') {
+    safeVoice = 'pt-BR-AntonioNeural';
   } else if (!safeVoice.startsWith('pt-BR-') && !safeVoice.startsWith('en-US-') && safeVoice !== 'elevenlabs') {
-    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural';
+    safeVoice = (sceneIndex % 2 === 1) ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural';
   }
   voiceName = safeVoice;
 
@@ -84,6 +86,24 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
 
   // Modern Dynamic Prosody (+12% rate & +3Hz pitch for engaging, punchy Shorts pacing!)
   const baseProsodyByVoice = {
+    'pt-BR-FranciscaNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' }
+    ],
+    'pt-BR-AntonioNeural': [
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+13%', pitch: '+4Hz' },
+      { rate: '+14%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' },
+      { rate: '+12%', pitch: '+3Hz' }
+    ],
     'pt-BR-YaraNeural': [
       { rate: '+12%', pitch: '+3Hz' },
       { rate: '+13%', pitch: '+4Hz' },
@@ -102,30 +122,15 @@ async function synthesizeSpeechWithTimings(text, outputWavPath, voiceName = 'pt-
       { rate: '+12%', pitch: '+3Hz' },
       { rate: '+12%', pitch: '+3Hz' }
     ],
-    'pt-BR-BrendaNeural': [
-      { rate: '+12%', pitch: '+3Hz' },
-      { rate: '+14%', pitch: '+4Hz' }
-    ],
-    'pt-BR-DonatoNeural': [
-      { rate: '+12%', pitch: '+3Hz' },
-      { rate: '+13%', pitch: '+3Hz' }
-    ],
     'pt-BR-ThalitaMultilingualNeural': [
       { rate: '+10%', pitch: '+2Hz' }
     ],
-    'pt-BR-AntonioNeural': [
-      { rate: '+10%', pitch: '+2Hz' }
-    ],
-    'pt-BR-FabioNeural': [{ rate: '+10%', pitch: '+2Hz' }],
-    'pt-BR-FranciscaNeural': [{ rate: '+10%', pitch: '+2Hz' }],
     'en-US-AvaMultilingualNeural': [{ rate: '+10%', pitch: '+2Hz' }],
     'en-US-EmmaMultilingualNeural': [{ rate: '+10%', pitch: '+2Hz' }]
   };
 
   const isMale = (voiceName.includes('Nicolau') || voiceName.includes('Antonio') || voiceName.includes('Fabio') || voiceName.includes('Donato') || (voiceName.includes('male') && !voiceName.includes('female')));
-  const fallbackNeuralVoice = isMale
-    ? (voiceName.includes('Nicolau') ? 'pt-BR-AntonioNeural' : 'pt-BR-NicolauNeural')
-    : (voiceName.includes('Yara') ? 'pt-BR-FranciscaNeural' : 'pt-BR-YaraNeural');
+  const fallbackNeuralVoice = isMale ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural';
 
   const spokenText = prepareTextForHumanSpeech(text);
 
