@@ -47,7 +47,7 @@ app.post('/api/generate', async (req, res) => {
     status: 'running',
     progress: 10,
     message: (voice === 'duet-yara-nicolau' || voice === 'duet-podcast')
-      ? 'Descobrindo fato curioso e criando roteiro Dueto Dinâmico (Yara 👩 + Nicolau 👨)...'
+      ? 'Descobrindo fato curioso e criando roteiro Dueto Dinâmico (Francisca 👩 + Antônio 👨)...'
       : 'Descobrindo fato curioso inédito e criando roteiro Studio Pop 4.0...'
   });
 
@@ -121,7 +121,7 @@ app.post('/api/generate', async (req, res) => {
         status: 'running',
         progress: 20,
         message: (voice === 'duet-yara-nicolau' || voice === 'duet-podcast')
-          ? `Roteiro Dueto: "${scriptData.title}". Gravando vozes de Yara 👩 + Nicolau 👨...`
+          ? `Roteiro Dueto: "${scriptData.title}". Gravando vozes de Francisca 👩 + Antônio 👨...`
           : `Roteiro inédito: "${scriptData.title}". Baixando 14 fotos reais em lote único...`
       });
 
