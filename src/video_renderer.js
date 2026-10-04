@@ -113,12 +113,90 @@ function classifySemanticWordStyle(wordText) {
   return { pillFill: '#00F0FF', pillText: '#000000', scaleMult: 1.12, sfxType: null };
 }
 
-function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610, palette = null) {
+// 100% Vector Emojis (Guaranteed 100% Crisp on all OS & Cloud Linux without needing OS emoji fonts)
+const VECTOR_EMOJIS = {
+  skull: {
+    stroke: '#FF007F',
+    svg: `<path d="M 20,16 C 20,11 36,11 36,16 C 36,20 33,22 31,24 L 31,30 L 25,30 L 25,24 C 23,22 20,20 20,16 Z" fill="#FFFFFF"/>
+          <circle cx="24" cy="18" r="2.5" fill="#000000"/>
+          <circle cx="32" cy="18" r="2.5" fill="#000000"/>
+          <rect x="26" y="27" width="1.5" height="4" fill="#000000"/>
+          <rect x="29" y="27" width="1.5" height="4" fill="#000000"/>`
+  },
+  fire: {
+    stroke: '#FF5722',
+    svg: `<path d="M 28,10 C 31,17 38,21 38,28 C 38,35 32,40 25,40 C 18,40 12,35 12,28 C 12,23 17,17 21,12 C 22,18 28,20 28,16 Z" fill="#FF5722" transform="translate(2, 0) scale(0.9)"/>
+          <path d="M 28,20 C 31,24 33,27 33,31 C 33,35 29,38 25,38 C 21,38 17,35 17,31 C 17,28 20,25 22,23 C 23,26 26,27 26,25 Z" fill="#FFEB3B" transform="translate(2, 0) scale(0.9)"/>`
+  },
+  lightning: {
+    stroke: '#FFE500',
+    svg: `<polygon points="30,10 16,25 24,25 20,41 38,22 28,22" fill="#FFE500" stroke="#000000" stroke-width="1.5"/>`
+  },
+  money: {
+    stroke: '#00E676',
+    svg: `<circle cx="28" cy="26" r="14" fill="#00E676" stroke="#000000" stroke-width="2"/>
+          <text x="28" y="32" font-size="18" font-weight="900" text-anchor="middle" fill="#000000" font-family="Arial, sans-serif">$</text>`
+  },
+  warning: {
+    stroke: '#FFD700',
+    svg: `<polygon points="28,11 11,40 45,40" fill="#FFD700" stroke="#000000" stroke-width="2"/>
+          <rect x="26.5" y="21" width="3.5" height="10" rx="1.5" fill="#000000"/>
+          <circle cx="28" cy="35" r="2" fill="#000000"/>`
+  },
+  planet: {
+    stroke: '#00F0FF',
+    svg: `<circle cx="28" cy="26" r="12" fill="#00F0FF" stroke="#000000" stroke-width="1.5"/>
+          <ellipse cx="28" cy="26" rx="20" ry="5.5" fill="none" stroke="#FFE500" stroke-width="2.5" transform="rotate(-20, 28, 26)"/>`
+  },
+  brain: {
+    stroke: '#FF007F',
+    svg: `<path d="M 21,17 C 16,17 13,22 15,27 C 13,30 15,35 20,36 C 21,38 24,40 28,39 L 28,16 C 25,16 23,17 21,17 Z" fill="#FF4081"/>
+          <path d="M 35,17 C 40,17 43,22 41,27 C 43,30 41,35 36,36 C 35,38 32,40 28,39 L 28,16 C 31,16 33,17 35,17 Z" fill="#FF4081"/>`
+  },
+  time: {
+    stroke: '#00F5D4',
+    svg: `<polygon points="16,12 40,12 32,26 40,40 16,40 24,26" fill="none" stroke="#00F5D4" stroke-width="2.5"/>
+          <polygon points="19,15 37,15 28,26" fill="#FFE500"/>
+          <polygon points="21,38 35,38 28,31" fill="#FFE500"/>`
+  }
+};
+
+function getEmojiBadgeForWord(wordText) {
+  const w = String(wordText || '').toLowerCase();
+  if (/morte|mort|fatal|veneno|perigo|destru|extin|fóssil|fossil|tóxico|toxico|radia|cemitério|esqueleto/i.test(w)) {
+    return VECTOR_EMOJIS.skull;
+  }
+  if (/fogo|chama|queima|fervent|vulc|explos|derret|quente|calor|inferno|brasa/i.test(w)) {
+    return VECTOR_EMOJIS.fire;
+  }
+  if (/raio|choque|relâmpago|relampago|energia|elétric|eletric|rápido|velocidade|potência|bateria/i.test(w)) {
+    return VECTOR_EMOJIS.lightning;
+  }
+  if (/dinheiro|dólar|dolar|bilh|milh|trilh|ouro|riqueza|fortuna|valor|caro|preço|lucro|economia/i.test(w)) {
+    return VECTOR_EMOJIS.money;
+  }
+  if (/segredo|proibido|cuidado|atenção|atencao|erro|alerta|bizarro|assustador|medo|terror/i.test(w)) {
+    return VECTOR_EMOJIS.warning;
+  }
+  if (/planeta|espaço|espacial|universo|estrela|lua|satélite|satelite|buraco negro|abismo|fossa|oceano|mar/i.test(w)) {
+    return VECTOR_EMOJIS.planet;
+  }
+  if (/cérebro|cerebro|mente|ideia|pensar|mistério|misterio|ciência|ciencia|descobert|estudo|pesquisa/i.test(w)) {
+    return VECTOR_EMOJIS.brain;
+  }
+  if (/século|seculo|anos|tempo|passado|futuro|era|idade|milênio/i.test(w)) {
+    return VECTOR_EMOJIS.time;
+  }
+  return null;
+}
+
+function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontSize, maxPixelWidth = 610, palette = null, floatingBadgeY = null) {
   const cleanedItems = lineItems
     .map(item => ({
       word: cleanDisplayString(item.word).toUpperCase(),
       isHighlighted: item.isHighlighted,
-      sem: classifySemanticWordStyle(item.word)
+      sem: classifySemanticWordStyle(item.word),
+      badge: item.isHighlighted ? getEmojiBadgeForWord(item.word) : null
     }))
     .filter(item => item.word.length > 0);
 
@@ -147,6 +225,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
   let pillRects = '';
   let shadowPaths = '';
   let fgPaths = '';
+  let floatingBadgesSvg = '';
 
   for (let i = 0; i < cleanedItems.length; i++) {
     const it = cleanedItems[i];
@@ -171,6 +250,18 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
       } else {
         fgPaths += `<path d="${dMain}" fill="${it.sem.pillText}" stroke="${it.sem.pillText}" stroke-width="1.5" stroke-linejoin="round"/>`;
       }
+
+      // Contextual Alex Hormozi 2.0 Pop-In Emoji Badge
+      if (it.badge) {
+        const badgeCenterX = pillX + (pillW / 2);
+        const badgeCenterY = floatingBadgeY !== null ? floatingBadgeY : (pillY - 30);
+        floatingBadgesSvg += `
+          <g transform="translate(${badgeCenterX - 28}, ${badgeCenterY - 26})">
+            <circle cx="28" cy="26" r="24" fill="#000000" fill-opacity="0.92" stroke="${it.badge.stroke}" stroke-width="3.5"/>
+            ${it.badge.svg}
+          </g>
+        `;
+      }
     } else {
       shadowPaths += `<path d="${dShadow}" fill="#000000" stroke="#000000" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>`;
       fgPaths += `<path d="${dMain}" fill="none" stroke="#000000" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="${dMain}" fill="#FFFFFF"/>`;
@@ -179,7 +270,7 @@ function renderHormoziLineVectorPaths(lineItems, centerX, baselineY, targetFontS
     curX += wWidth + spaceW;
   }
 
-  return `${pillRects}\n${shadowPaths}\n${fgPaths}`;
+  return `${pillRects}\n${shadowPaths}\n${fgPaths}\n${floatingBadgesSvg}`;
 }
 
 // IMPROVEMENT #2: Smart Magnitude Ranker — always selects the biggest/most shocking number in the narration!
@@ -453,7 +544,7 @@ const VIDEO_FPS = 20;
 const SUB_STRIP_Y = 790;
 const SUB_STRIP_H = HEIGHT - SUB_STRIP_Y; // 490px bottom overlay strip
 
-async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isPunchIn = false) {
+async function prepareScenePhotoZooms(urlQueue = [], colorTheme = 'cosmic', isPunchIn = false) {
   const pal = getAtmospherePalette(colorTheme);
   let bestImgBuf = null;
 
@@ -484,38 +575,39 @@ async function prepareScenePhotoBuffer(urlQueue = [], colorTheme = 'cosmic', isP
     } catch (e) {}
   }
 
+  const CANVAS_W = isPunchIn ? 900 : 800;
+  const CANVAS_H = isPunchIn ? 1600 : 1422;
+  const zooms = isPunchIn ? [1.15, 1.18, 1.21, 1.24] : [1.00, 1.03, 1.06, 1.09];
+
   if (bestImgBuf) {
     try {
-      if (isPunchIn) {
-        // Dynamic Shot B: 116% Macro Punch-in Cut on center action
-        const punchW = Math.round(OVERSCAN_W * 1.16);
-        const punchH = Math.round(OVERSCAN_H * 1.16);
-        const left = Math.round((punchW - OVERSCAN_W) / 2);
-        const top = Math.round((punchH - OVERSCAN_H) / 2);
-        return await sharp(bestImgBuf)
-          .resize(punchW, punchH, { fit: 'cover', position: 'center' })
-          .extract({ left, top, width: OVERSCAN_W, height: OVERSCAN_H })
-          .sharpen({ sigma: 1.05 })
-          .modulate({ brightness: 1.05, saturation: 1.18 })
-          .jpeg({ quality: 80 })
+      const canvasBuf = await sharp(bestImgBuf)
+        .resize(CANVAS_W, CANVAS_H, { fit: 'cover', position: 'center' })
+        .sharpen({ sigma: isPunchIn ? 1.05 : 1.0 })
+        .modulate({ brightness: isPunchIn ? 1.05 : 1.04, saturation: isPunchIn ? 1.18 : 1.15 })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+
+      return await Promise.all(zooms.map(async (z) => {
+        const boxW = Math.round(CANVAS_W / z);
+        const boxH = Math.round(CANVAS_H / z);
+        const left = Math.round((CANVAS_W - boxW) / 2);
+        const top = Math.round((CANVAS_H - boxH) / 2);
+        return sharp(canvasBuf)
+          .extract({ left, top, width: boxW, height: boxH })
+          .resize(OVERSCAN_W, OVERSCAN_H)
+          .jpeg({ quality: 78 })
           .toBuffer();
-      } else {
-        // Shot A: Wide / Medium Framing with rich vibrant grading
-        return await sharp(bestImgBuf)
-          .resize(OVERSCAN_W, OVERSCAN_H, { fit: 'cover', position: 'center' })
-          .sharpen({ sigma: 1.0 })
-          .modulate({ brightness: 1.04, saturation: 1.15 })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-      }
+      }));
     } catch (e) {}
   }
 
   // Fallback dark studio canvas if offline
   const fallbackSvg = `<svg width="${OVERSCAN_W}" height="${OVERSCAN_H}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="${OVERSCAN_W}" height="${OVERSCAN_H}" fill="${pal.bgGradTop}"/>
+    <rect width="${OVERSCAN_W}" height="${OVERSCAN_H}" fill="${pal.bgGradTop || '#111827'}"/>
   </svg>`;
-  return sharp(Buffer.from(fallbackSvg)).jpeg({ quality: 82 }).toBuffer();
+  const fallbackBuf = await sharp(Buffer.from(fallbackSvg)).jpeg({ quality: 80 }).toBuffer();
+  return [fallbackBuf, fallbackBuf, fallbackBuf, fallbackBuf];
 }
 
 // UPGRADE #3: Build Word-Level Active Pill Subtitle Steps inside Stationary 2-3 Word Phrases!
@@ -724,10 +816,11 @@ async function renderCaptionedFrame({
 
   const lineSpacing = Math.round(fontSize * 1.42);
   const baseStartY = wrappedLines.length === 1 ? 885 : (wrappedLines.length === 2 ? 850 : 820);
+  const floatingBadgeY = Math.round(baseStartY - fontSize * 0.92 - 28);
 
   const subtitleLinesSvg = wrappedLines.map((lineItems, lIdx) => {
     const yPos = baseStartY + lIdx * lineSpacing;
-    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal);
+    return renderHormoziLineVectorPaths(lineItems, 360, yPos, fontSize, 600, pal, floatingBadgeY);
   }).join('\n');
 
   // Floating Progress Bar width
@@ -815,24 +908,24 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   onProgress(48, 'Buscando 14 fotos reais HD da Web...');
   const photoQueues = await prefetchTopicPhotoUrlsForScenes(scriptData);
 
-  // 3. Ultra-fast 9:16 Photo Processing
-  onProgress(56, 'Preparando fotos 9:16 Full-Screen...');
+  // 3. Ultra-fast 9:16 Photo Processing with 4 Ken Burns Progressive Zoom Slices per Shot
+  onProgress(56, 'Preparando fotos 9:16 Full-Screen + Movimento Ken Burns...');
   const scenePhotoBuffers = await Promise.all(scenes.map(async (_, i) => {
     const pQ = photoQueues[i] || photoQueues[0] || { queueA: [], queueB: [] };
-    const [photoBufA, photoBufB] = await Promise.all([
-      prepareScenePhotoBuffer(pQ.queueA, colorTheme, false),
-      prepareScenePhotoBuffer(pQ.queueB, colorTheme, true)
+    const [photoBufAZooms, photoBufBZooms] = await Promise.all([
+      prepareScenePhotoZooms(pQ.queueA, colorTheme, false),
+      prepareScenePhotoZooms(pQ.queueB, colorTheme, true)
     ]);
-    return { photoBufA, photoBufB };
+    return { photoBufAZooms, photoBufBZooms };
   }));
 
   onProgress(66, isDuetPodcast
     ? 'Dueto Sincronizado: Mixando vozes de Francisca 👩 & Antônio 👨...'
-    : 'Sincronizando 14 fotos reais HD + Efeitos por Palavra...');
+    : 'Sincronizando 14 fotos reais HD + Movimento Ken Burns...');
 
   for (let i = 0; i < scenes.length; i++) {
     const { audioWavPath, ttsResult, sceneVoice } = ttsResults[i];
-    const { photoBufA, photoBufB } = scenePhotoBuffers[i];
+    const { photoBufAZooms, photoBufBZooms } = scenePhotoBuffers[i];
     const isMale = (sceneVoice && (sceneVoice.includes('Nicolau') || sceneVoice.includes('Antonio') || sceneVoice.includes('Fabio') || sceneVoice.includes('Donato'))) || (isDuetPodcast && (i % 2 === 1));
     const speakerInfo = isDuetPodcast ? {
       name: isMale ? 'Antônio' : 'Francisca',
@@ -846,8 +939,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       index: i,
       narration: scenes[i].narration,
       audioWavPath,
-      photoBufA,
-      photoBufB,
+      photoBufAZooms,
+      photoBufBZooms,
       duration: ttsResult.duration,
       wordBoundaries: ttsResult.wordBoundaries,
       speakerInfo
@@ -865,18 +958,17 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     totalDuration += sceneAssets[i].duration;
   }
 
-  onProgress(68, 'Renderizando Fotos HD 100% Nítidas + Legendas Karaokê 3 Cores...');
+  onProgress(68, 'Renderizando Fotos HD 100% Nítidas + Legendas Karaokê 3 Cores + Emojis...');
 
-  // Pre-bake Shot A and Shot B with static HUD overlays (Top Vignette, Bottom Vignette, Badges)
-  // This reduces Sharp operations from heavy multi-layer compositions to ultra-fast single-pass writes!
+  // Pre-bake Shot A and Shot B zoom slices with soft bottom vignette for high-contrast subtitles
   for (let i = 0; i < sceneAssets.length; i++) {
     const asset = sceneAssets[i];
-    const [bakedShotA, bakedShotB] = await Promise.all([
-      preparePrebakedShot(asset.photoBufA, palette),
-      preparePrebakedShot(asset.photoBufB, palette)
+    const [bakedShotAZooms, bakedShotBZooms] = await Promise.all([
+      Promise.all(asset.photoBufAZooms.map(b => preparePrebakedShot(b, palette))),
+      Promise.all(asset.photoBufBZooms.map(b => preparePrebakedShot(b, palette)))
     ]);
-    asset.bakedShotA = bakedShotA;
-    asset.bakedShotB = bakedShotB;
+    asset.bakedShotAZooms = bakedShotAZooms;
+    asset.bakedShotBZooms = bakedShotBZooms;
   }
 
   const masterFramesListPath = path.join(tmpDir, 'master_frames.txt');
@@ -899,8 +991,20 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
       sceneElapsed += thisChunkDur;
       const progressRatio = Math.min(1, (elapsedDuration + sceneElapsed) / totalDuration);
 
+      // Ken Burns Progressive Micro-Zooms: smoothly pushes camera forward with each subtitle line
       const isFirstHalf = (c < halfIdx);
-      const prebakedShotBuf = isFirstHalf ? asset.bakedShotA : asset.bakedShotB;
+      let prebakedShotBuf;
+      if (isFirstHalf) {
+        const progressA = c / Math.max(1, halfIdx - 1);
+        const zoomIdx = Math.min(3, Math.floor(progressA * 3.99));
+        prebakedShotBuf = asset.bakedShotAZooms[zoomIdx];
+      } else {
+        const bIdx = c - halfIdx;
+        const bTotal = timedChunks.length - halfIdx;
+        const progressB = bIdx / Math.max(1, bTotal - 1);
+        const zoomIdx = Math.min(3, Math.floor(progressB * 3.99));
+        prebakedShotBuf = asset.bakedShotBZooms[zoomIdx];
+      }
 
       // UPGRADE #6: Trigger 0.08s Film Flash on the very first frame of each new photo cut
       const isTransitionFlash = (c === 0 || c === halfIdx);
@@ -942,7 +1046,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   }
   fs.writeFileSync(masterFramesListPath, masterConcatContent, 'utf8');
 
-  onProgress(86, 'Masterizando Vídeo 720x1280 HD + SFX por Palavra + Voz Shure SM7B...');
+  onProgress(86, 'Masterizando Vídeo 720x1280 HD + Sidechain Auto-Ducking + SFX Cinema...');
 
   const masterVoiceWavPath = path.join(tmpDir, 'master_voice.wav');
   const exactVoiceDur = concatenateWavFilesSampleExact(sceneAssets.map(a => a.audioWavPath), masterVoiceWavPath);
@@ -953,7 +1057,8 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
   const finalFilename = `${jobId}.mp4`;
   const finalMp4Path = path.join(outDir, finalFilename);
 
-  // Ultra-Fast StillImage Concat Muxing: ~1.4s encode time, 100% rock-solid, zero trembling, zero 504 timeouts!
+  // Broadcast Audio Mixing with Professional Sidechain Auto-Ducking
+  // BGM smoothly ducks when speech is active and swells up with whooshes and bass booms during pauses and transitions!
   const audioFadeStart = Math.max(0, exactVoiceDur - 0.40).toFixed(2);
   const ffmpegArgs = [
     '-y',
@@ -961,7 +1066,7 @@ async function buildShortVideo(scriptData, options = {}, onProgress = () => {}) 
     '-i', masterVoiceWavPath,
     '-i', bgMusicWav,
     '-filter_complex',
-    `[1:a]highpass=f=65,acompressor=threshold=-19dB:ratio=2.2:attack=18:release=140:makeup=1.1,volume=1.06[voice];[2:a]highpass=f=45,equalizer=f=2500:t=q:w=1.2:g=-2.0,volume=0.18[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
+    `[1:a]highpass=f=65,acompressor=threshold=-19dB:ratio=2.2:attack=18:release=140:makeup=1.1,volume=1.06,asplit=2[voice_main][voice_side];[2:a]highpass=f=45,equalizer=f=2500:t=q:w=1.2:g=-2.0,volume=0.32[bgm];[bgm][voice_side]sidechaincompress=threshold=0.04:ratio=4.5:attack=15:release=260:makeup=1[ducked_bgm];[voice_main][ducked_bgm]amix=inputs=2:duration=first:dropout_transition=2,afade=t=out:st=${audioFadeStart}:d=0.40[aout]`,
     '-map', '0:v',
     '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '24', '-pix_fmt', 'yuv420p', '-fps_mode', 'vfr',
