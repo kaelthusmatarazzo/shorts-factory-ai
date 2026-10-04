@@ -347,13 +347,11 @@
         <div class="field">
           <label>Voz & Dublagem (+12% Ritmo Shorts)</label>
           <select id="voiceSelect">
-            <option value="duet-yara-nicolau" selected>🎙️🔥 Dueto Dinâmico (Yara 👩 + Nicolau 👨 • Mais Expressivo & Viral)</option>
-            <option value="pt-BR-YaraNeural">👩✨ Solo: Yara (Jovem, Expressiva & Conversacional)</option>
-            <option value="pt-BR-NicolauNeural">👨⚡ Solo: Nicolau (Enérgico, Firme & Cativante)</option>
-            <option value="pt-BR-BrendaNeural">👩🌟 Solo: Brenda (Clara & Vibrante)</option>
-            <option value="pt-BR-DonatoNeural">👨🎙️ Solo: Donato (Storyteller Envolvente)</option>
+            <option value="duet-yara-nicolau" selected>🎙️🔥 Dueto Dinâmico (Francisca 👩 + Antônio 👨 • Viral & Expressivo)</option>
+            <option value="pt-BR-FranciscaNeural">👩✨ Solo: Francisca (Jovem, Expressiva & Conversacional)</option>
+            <option value="pt-BR-AntonioNeural">👨⚡ Solo: Antônio (Enérgico, Firme & Cativante)</option>
+            <option value="pt-BR-ThalitaMultilingualNeural">👩🌟 Solo: Thalita (Clara & Vibrante)</option>
             <option value="elevenlabs">💎🎙️ ElevenLabs AI (Vozes de Estúdio Cinema)</option>
-            <option value="duet-podcast">🎙️ Dueto Clássico (Thalita 👩 + Antônio 👨)</option>
           </select>
         </div>
       </div>
@@ -856,23 +854,16 @@
       const isDuet = (voice === 'duet-podcast');
       btn.disabled = true;
       statusBox.style.display = 'block';
-      updateProgress(12, isDuet
-        ? (usePreviewedScript ? 'Dueto Podcast Ativo: Gravando Thalita 👩 + Antônio 👨...' : 'Dueto Podcast: Buscando 14 fotos reais + Gravando Thalita 👩 & Antônio 👨...')
-        : (usePreviewedScript ? 'Studio 4.0: Gravando seu roteiro Studio 4.0...' : 'Studio 4.0: Buscando 14 fotos reais + Voz Emocional...'));
+      updateProgress(12, 'Iniciando produção: Vozes Neurais (Francisca 👩 + Antônio 👨) & Fotos HD...');
 
       // Smooth progress ticker for synchronous Vercel Serverless execution
       let simPct = 14;
       const simTimer = setInterval(() => {
         if (simPct < 92) {
           simPct += 4;
-          const msgs = isDuet ? [
+          const msgs = [
+            'Gravando vozes neurais (Francisca 👩 + Antônio 👨)...',
             'Sincronizando 14 fotos reais HD da Web em lote único...',
-            'Gravando Dueto Podcast: Thalita 👩 + Antônio 👨 (WordBoundary)...',
-            'Renderizando Cinema 9:16 + Badge Podcast Dueto + Karaokê 3 Cores...',
-            'Mixando Sound Design + Voz Shure SM7B + Transições Pro 🎬...'
-          ] : [
-            'Baixando 14 fotos reais verificadas (Shot A + Shot B) em lote único...',
-            'Gravando voz Neural com curva de emoção por cena (WordBoundary)...',
             'Renderizando Cinema Full-Screen 9:16 + Karaokê 3 Cores + Dados Reais...',
             'Mixando Sound Design 14 Cortes (Sub-Bass + Whooshes) + Fade Final 🎬...'
           ];
@@ -903,11 +894,14 @@
         }
 
         if (data.directResult) {
-          btn.disabled = false;
-          statusBox.style.display = 'none';
-          await saveVideoToLocalHistory(data.directResult);
-          await displayVideoResult(data.directResult);
-          await loadHistoryGallery();
+          updateProgress(100, 'Vídeo 100% renderizado com sucesso!');
+          setTimeout(async () => {
+            btn.disabled = false;
+            statusBox.style.display = 'none';
+            await saveVideoToLocalHistory(data.directResult);
+            await displayVideoResult(data.directResult);
+            await loadHistoryGallery();
+          }, 400);
           return;
         }
 
