@@ -163,29 +163,41 @@ const VECTOR_EMOJIS = {
 
 function getEmojiBadgeForWord(wordText) {
   const w = String(wordText || '').toLowerCase();
-  if (/morte|mort|fatal|veneno|perigo|destru|extin|fóssil|fossil|tóxico|toxico|radia|cemitério|esqueleto/i.test(w)) {
+  // 💀 Danger / Death / Toxic / Skeleton
+  if (/\b(?:morte|morto|mortos|morreu|fatal|veneno|perigo|destru|extin|fóssil|fossil|tóxico|toxico|radia|esqueleto)\b/i.test(w)) {
     return VECTOR_EMOJIS.skull;
   }
-  if (/fogo|chama|queima|fervent|vulc|explos|derret|quente|calor|inferno|brasa/i.test(w)) {
+  // 🔥 Fire / Heat / Burning / Explosion
+  if (/\b(?:fogo|chama|chamas|queima|queimando|fervente|vulcão|vulcao|explosão|explosao|derrete|derretendo|quente|calor|inferno|brasa)\b/i.test(w)) {
     return VECTOR_EMOJIS.fire;
   }
-  if (/raio|choque|relâmpago|relampago|energia|elétric|eletric|rápido|velocidade|potência|bateria/i.test(w)) {
+  // ⚡ Lightning / Electric / Shock / Power
+  if (/\b(?:raio|raios|choque|relâmpago|relampago|energia|elétrico|eletrico|rápido|velocidade|potência|bateria)\b/i.test(w)) {
     return VECTOR_EMOJIS.lightning;
   }
-  if (/dinheiro|dólar|dolar|bilh|milh|trilh|ouro|riqueza|fortuna|valor|caro|preço|lucro|economia/i.test(w)) {
+  // 💰 Money / Millions / Billions / Wealth / Gold
+  if (/\b(?:dinheiro|dólar|dolar|bilhões|bilhoes|milhões|milhoes|trilhões|trilhoes|ouro|riqueza|fortuna|valor|caro|preço|lucro|economia)\b/i.test(w)) {
     return VECTOR_EMOJIS.money;
   }
-  if (/segredo|proibido|cuidado|atenção|atencao|erro|alerta|bizarro|assustador|medo|terror/i.test(w)) {
+  // ⚠️ Warning / Shock / Secret / Caution
+  if (/\b(?:segredo|proibido|cuidado|atenção|atencao|alerta|bizarro|assustador|medo|terror|inacreditável|inacreditavel)\b/i.test(w)) {
     return VECTOR_EMOJIS.warning;
   }
-  if (/planeta|espaço|espacial|universo|estrela|lua|satélite|satelite|buraco negro|abismo|fossa|oceano|mar/i.test(w)) {
+  // 🪐 Planet / Space / Ocean Abyss
+  if (/\b(?:planeta|espaço|espacial|universo|estrela|estrelas|lua|satélite|satelite|abismo|fossa|oceano|mar)\b/i.test(w)) {
     return VECTOR_EMOJIS.planet;
   }
-  if (/cérebro|cerebro|mente|ideia|pensar|mistério|misterio|ciência|ciencia|descobert|estudo|pesquisa/i.test(w)) {
+  // 🧠 Brain / Science / Mystery / Mind
+  if (/\b(?:cérebro|cerebro|mente|ideia|pensar|mistério|misterio|ciência|ciencia|descoberta|estudo|pesquisa|cientistas)\b/i.test(w)) {
     return VECTOR_EMOJIS.brain;
   }
-  if (/século|seculo|anos|tempo|passado|futuro|era|idade|milênio/i.test(w)) {
+  // ⏳ Time / Centuries / Years
+  if (/\b(?:século|séculos|seculo|seculos|anos|tempo|passado|futuro|era|idade|milênio|milenio)\b/i.test(w)) {
     return VECTOR_EMOJIS.time;
+  }
+  // ⚡ Default for Numbers and Magnitudes
+  if (/\d+/.test(w) || /\b(?:mil|dobro|triplo|zero|cento|cem|duzentos|quinhentos)\b/i.test(w)) {
+    return VECTOR_EMOJIS.lightning;
   }
   return null;
 }
@@ -728,7 +740,7 @@ function wrapWordsIntoSafeLines(wordsChunk, highlightIdx) {
 
   wordsChunk.forEach((w, idx) => {
     const cleanLen = w.length;
-    if (curLine.length > 0 && (curLine.length >= 2 || curLen + 1 + cleanLen > 12)) {
+    if (curLine.length > 0 && (curLine.length >= 3 || curLen + 1 + cleanLen > 20)) {
       lines.push(curLine);
       curLine = [];
       curLen = 0;
