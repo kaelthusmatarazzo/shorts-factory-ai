@@ -183,10 +183,9 @@ function normalizeMetadata(item) {
       if (!sc.fallbackThemeQuery) {
         sc.fallbackThemeQuery = `${cleanTopicShort} photo`;
       }
-      sc.sceneVisualKeywords = sc.imageQuery;
       if (!sc.speaker) {
-        sc.speaker = (idx % 2 === 1 ? 'Nicolau' : 'Yara');
-        sc.voice = (idx % 2 === 1 ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural');
+        sc.speaker = (idx % 2 === 1 ? 'Antônio' : 'Francisca');
+        sc.voice = (idx % 2 === 1 ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural');
       }
     });
   }
@@ -501,7 +500,7 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
   const cleanHook = rawHook.charAt(0).toUpperCase() + rawHook.slice(1);
 
   const builtScenes = curated.scenes.map((sc, idx) => {
-    const isNicolau = (idx % 2 === 1);
+    const isAntonio = (idx % 2 === 1);
     let narrationText = sc.narration.trim();
     if (idx === 0) {
       if (cleanHook && !sc.narration.toLowerCase().includes(cleanHook.toLowerCase().slice(0, 20))) {
@@ -515,8 +514,8 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     }
     return {
       narration: prepareTextForHumanSpeech(narrationText),
-      speaker: isNicolau ? 'Nicolau' : 'Yara',
-      voice: isNicolau ? 'pt-BR-NicolauNeural' : 'pt-BR-YaraNeural',
+      speaker: isAntonio ? 'Antônio' : 'Francisca',
+      voice: isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural',
       imageQuery: sc.imageQuery || cleanTopic,
       fallbackThemeQuery: sc.fallbackThemeQuery || `${cleanTopic} photo`,
       directImageUrl: idx === 0 ? wikiImage : null,
@@ -525,14 +524,15 @@ async function buildScriptFromCuratedFact(curated, durationMode = 'monetized') {
     };
   });
 
-  const conclusionText = `Assim, os fatos reais sobre ${cleanTopic} revelam como o nosso planeta e a ciência são cheios de descobertas surpreendentes. Você já conhecia essa história? Deixe seu like, compartilhe com um amigo curioso e comente sua opinião aqui embaixo!`;
+  const loopEndBridge = curated.loopEnd || 'E tudo isso faz sentido quando você descobre que...';
+  const conclusionText = `Esses fatos sobre ${cleanTopic} revelam como a ciência ainda guarda mistérios inacreditáveis. Você já sabia disso? Comente aqui embaixo! ${loopEndBridge}`;
   builtScenes.push({
     narration: prepareTextForHumanSpeech(conclusionText),
-    speaker: 'Yara',
-    voice: 'pt-BR-YaraNeural',
+    speaker: 'Francisca',
+    voice: 'pt-BR-FranciscaNeural',
     imageQuery: curated.scenes[0]?.imageQuery || cleanTopic,
     fallbackThemeQuery: curated.scenes[0]?.fallbackThemeQuery || cleanTopic,
-    sceneLabel: `7/7 • Conclusão & CTA`,
+    sceneLabel: `7/7 • Conclusão & Loop Infinito`,
     isOutroScene: true
   });
 
@@ -648,17 +648,20 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
   const description = `${f[0]}\n\n${f[1]}\n\nAssista até o final para conhecer os fatos reais sobre ${cleanTopic}! 😱 Você já sabia disso? Comente aqui embaixo! 👇`;
   const hashtags = `#fatoscuriosos #curiosidades #vocesabia #ciencia ${topicTag} #documentario #tiktokbrasil #fyp #viral #shorts`;
 
-  // Natural hook for Scene 1: If f[0] doesn't mention cleanTopic, introduce it smoothly; otherwise start directly!
-  const mentionsTopic = f[0].toLowerCase().includes(cleanTopic.toLowerCase());
-  const scene1Text = mentionsTopic
-    ? f[0]
-    : `Pouca gente imagina o que realmente acontece quando falamos de ${cleanTopic}: ${f[0]}`;
+  // Pattern Interrupt Hook for Scene 1 (Grabs attention in the first 2.5 seconds)
+  const patternInterruptHooks = [
+    `Preste muita atenção: o que os cientistas acabaram de confirmar sobre ${cleanTopic} vai te surpreender.`,
+    `Se você visse isso com os próprios olhos, pensaria que é de outro planeta. Mas é 100% real:`,
+    `Pouca gente imagina o que realmente acontece quando falamos de ${cleanTopic}:`
+  ];
+  const chosenHook = patternInterruptHooks[Math.floor(Math.random() * patternInterruptHooks.length)];
+  const scene1Text = `${chosenHook} ${f[0]}`;
 
   const allScenes = [
     {
       narration: prepareTextForHumanSpeech(scene1Text),
-      speaker: 'Yara',
-      voice: 'pt-BR-YaraNeural',
+      speaker: 'Francisca',
+      voice: 'pt-BR-FranciscaNeural',
       imageQuery: `${cleanTopic}`,
       fallbackThemeQuery: `${cleanTopic} real photo`,
       directImageUrl: wikiFact.wikiImage || null,
@@ -666,52 +669,52 @@ function buildMonetizedViralScriptFromWikiFact(wikiFact, niche = 'curiosidades',
     },
     {
       narration: prepareTextForHumanSpeech(f[1]),
-      speaker: 'Nicolau',
-      voice: 'pt-BR-NicolauNeural',
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic} discovery`,
       fallbackThemeQuery: `${cleanTopic} detail`,
       sceneLabel: `2/7 • Origem & Contexto Real`
     },
     {
       narration: prepareTextForHumanSpeech(f[2]),
-      speaker: 'Yara',
-      voice: 'pt-BR-YaraNeural',
+      speaker: 'Francisca',
+      voice: 'pt-BR-FranciscaNeural',
       imageQuery: `${cleanTopic} nature`,
       fallbackThemeQuery: `${cleanTopic} close up`,
       sceneLabel: `3/7 • Como Funciona na Prática`
     },
     {
       narration: prepareTextForHumanSpeech(f[3]),
-      speaker: 'Nicolau',
-      voice: 'pt-BR-NicolauNeural',
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic} science`,
       fallbackThemeQuery: `${cleanTopic} nature science`,
       sceneLabel: `4/7 • Dados & Proporções`
     },
     {
       narration: prepareTextForHumanSpeech(f[4]),
-      speaker: 'Yara',
-      voice: 'pt-BR-YaraNeural',
+      speaker: 'Francisca',
+      voice: 'pt-BR-FranciscaNeural',
       imageQuery: `${cleanTopic} archive`,
       fallbackThemeQuery: `${cleanTopic} history archive`,
       sceneLabel: `5/7 • O Registro Comprovado`
     },
     {
       narration: prepareTextForHumanSpeech(f[5]),
-      speaker: 'Nicolau',
-      voice: 'pt-BR-NicolauNeural',
+      speaker: 'Antônio',
+      voice: 'pt-BR-AntonioNeural',
       imageQuery: `${cleanTopic} discovery`,
       fallbackThemeQuery: `${cleanTopic} discovery`,
       sceneLabel: `6/7 • Conclusão Científica`,
       isCommentBaitScene: true
     },
     {
-      narration: prepareTextForHumanSpeech(`Esses registros sobre ${cleanTopic} comprovam como o nosso mundo ainda guarda mistérios fascinantes. E você, o que achou dessa história? Deixe o like, compartilhe com quem gosta de curiosidades e comente sua opinião aqui embaixo!`),
-      speaker: 'Yara',
-      voice: 'pt-BR-YaraNeural',
+      narration: prepareTextForHumanSpeech(`Esses dados reais sobre ${cleanTopic} comprovam como o nosso mundo ainda guarda mistérios fascinantes. E você, o que achou dessa história? Deixe o like, comente sua opinião e compartilhe com um amigo! Mas o detalhe que deixa todo mundo sem reação é que...`),
+      speaker: 'Francisca',
+      voice: 'pt-BR-FranciscaNeural',
       imageQuery: `${cleanTopic} photo`,
       fallbackThemeQuery: `${cleanTopic} photo`,
-      sceneLabel: `7/7 • Conclusão & CTA`,
+      sceneLabel: `7/7 • Conclusão & Loop Infinito`,
       isOutroScene: true
     }
   ];
