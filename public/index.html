@@ -703,7 +703,7 @@
       scenesContainer.innerHTML = scenes.map((s, idx) => {
         const isMale = isDuet && (s.speaker === 'Nicolau' || s.speaker === 'Antônio' || (idx % 2 === 1));
         const speakerTag = isDuet
-          ? (isMale ? '👨⚡ NICOLAU (Voz Masculina • Dinâmica & Reação)' : '👩✨ YARA (Voz Feminina • Narradora Principal)')
+          ? (isMale ? '👨⚡ ANTÔNIO (Voz Masculina • Dinâmica & Reação)' : '👩✨ FRANCISCA (Voz Feminina • Narradora Principal)')
           : '🎙️ Fala da Narração (Voz Solo)';
         const cardBorder = isDuet
           ? (isMale ? 'border:1px solid rgba(0,240,255,0.45); background:rgba(0,240,255,0.04);' : 'border:1px solid rgba(255,0,127,0.45); background:rgba(255,0,127,0.04);')
@@ -717,7 +717,7 @@
             ${scenes.length > 2 ? `<button type="button" class="btn-secondary" style="padding:3px 8px; font-size:0.68rem; color:#ff6b6b; border-color:rgba(255,107,107,0.4);" onclick="removeEditorScene(${idx})">🗑️ Excluir</button>` : ''}
           </div>
           <label style="display:block; font-size:0.7rem; color:${speakerBadgeColor}; font-weight:800; margin-bottom:3px;">${speakerTag}:</label>
-          <textarea class="scene-narration-input" rows="3" oninput="updateLiveStructure()" style="width:100%; background:#07080d; color:#fff; border:1px solid ${isAntonio ? 'rgba(0,240,255,0.35)' : 'rgba(255,45,85,0.35)'}; border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
+          <textarea class="scene-narration-input" rows="3" oninput="updateLiveStructure()" style="width:100%; background:#07080d; color:#fff; border:1px solid ${isMale ? 'rgba(0,240,255,0.35)' : 'rgba(255,45,85,0.35)'}; border-radius:8px; padding:8px; font-size:0.8rem; font-family:inherit; margin-bottom:6px;">${escapeHtmlAttr(s.narration || '')}</textarea>
           <label style="display:block; font-size:0.7rem; color:#a8a9c0; margin-bottom:3px;">📸 Busca da Foto Real (Wikipédia / Wikimedia):</label>
           <input type="text" class="scene-photo-input" value="${escapeHtmlAttr(s.imageQuery || script.sourceTopic || '')}" style="width:100%; background:#07080d; color:#b8eaff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:7px; font-size:0.76rem;" />
         </div>
@@ -747,8 +747,8 @@
           narration: el.value.trim() || orig.narration || 'Fato curioso impressionante.',
           imageQuery: (photoEls[idx] && photoEls[idx].value.trim()) || orig.imageQuery || cleanCoverTitle,
           sceneLabel: orig.sceneLabel || `${idx + 1}/${narrationEls.length} • ${cleanCoverTitle.slice(0, 28)}`,
-          speaker: isDuet ? (isAntonio ? 'Antônio' : 'Thalita') : 'Solo',
-          voice: isDuet ? (isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-ThalitaMultilingualNeural') : currentVoice
+          speaker: isDuet ? (isAntonio ? 'Antônio' : 'Francisca') : 'Solo',
+          voice: isDuet ? (isAntonio ? 'pt-BR-AntonioNeural' : 'pt-BR-FranciscaNeural') : currentVoice
         };
       });
 
